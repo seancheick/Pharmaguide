@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "PharmaGuide",
+    "slug": "pharmaguide",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.pharmaguide.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PharmaGuide needs camera access to scan product barcodes and ingredient lists for supplement analysis.",
+        "NSMicrophoneUsageDescription": "PharmaGuide uses microphone for voice-activated scanning and AI interactions."
+      }
+    },
+    "android": {
+      "package": "com.pharmaguide.app",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      [
+        "expo-barcode-scanner",
+        {
+          "cameraPermission": "Allow PharmaGuide to scan product barcodes for supplement analysis."
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PharmaGuide needs camera access to scan product barcodes for supplement analysis."
+        }
+      ]
+    ]
+  }
+}

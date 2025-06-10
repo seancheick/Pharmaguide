@@ -1,0 +1,14 @@
+// data/interactions/critical-interactions.json
+{
+  "version": "1.0.0",
+  "lastUpdated": "2025-06-09",
+  "interactions": [
+    {
+      "primary_drug": "warfarin",
+      "interacting_agents": ["vitamin_k", "ginkgo", "garlic", "fish_oil"],
+      "severity": "CRITICAL",
+      "mechanism": "Altered blood clotting",
+      "evidence": "FDA Warning"
+    }
+  ]
+}
