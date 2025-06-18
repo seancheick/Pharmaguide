@@ -1,29 +1,52 @@
+// src/types/index.ts
+
+// User types
 export interface User {
   id: string;
-  email: string;
+  email: string | null;
+  is_anonymous: boolean;
   profile: UserProfile;
   preferences: UserPreferences;
+  points?: UserPoints;
+  streaks?: UserStreaks;
   createdAt: string;
   updatedAt: string;
 }
 
 export interface UserProfile {
-  firstName?: string;
-  lastName?: string;
-  age?: number;
-  gender?: "male" | "female" | "other" | "prefer_not_to_say";
-  healthGoals: HealthGoal[];
-  conditions: HealthCondition[];
-  medications: Medication[];
-  allergies: Allergy[];
-  genetics?: GeneticProfile;
+  firstName: string | null;
+  lastName: string | null;
+  age: number | null;
+  gender: string | null;
+  healthGoals: string[];
+  conditions: string[];
+  medications: string[];
+  allergies: string[];
+  genetics: any | null;
 }
 
 export interface UserPreferences {
   aiResponseStyle: "concise" | "detailed" | "technical";
   budgetRange: "budget" | "mid" | "premium";
   primaryFocus: "safety" | "efficacy" | "value" | "naturalness";
-  notifications: NotificationSettings;
+  notifications: {
+    push_enabled: boolean;
+    email_enabled: boolean;
+    reminder_frequency: string;
+  };
+}
+
+export interface UserPoints {
+  total: number;
+  level: number;
+  levelTitle: string;
+  nextLevelAt: number;
+}
+
+export interface UserStreaks {
+  current: number;
+  longest: number;
+  lastActivity: string | null;
 }
 
 export interface Product {
@@ -35,6 +58,7 @@ export interface Product {
   ingredients: Ingredient[];
   servingSize: string;
   servingsPerContainer: number;
+  dosage?: string;
   price?: number;
   imageUrl?: string;
   verified: boolean;
@@ -55,28 +79,6 @@ export interface Ingredient {
   category: "active" | "inactive" | "excipient";
 }
 
-export interface ProductAnalysis {
-  productId: string;
-  overallScore: number;
-  categoryScores: {
-    ingredients: number;
-    bioavailability: number;
-    dosage: number;
-    purity: number;
-    value: number;
-  };
-  strengths: AnalysisPoint[];
-  weaknesses: AnalysisPoint[];
-  recommendations: {
-    goodFor: string[];
-    avoidIf: string[];
-  };
-  alternatives: Alternative[];
-  safetyCheck: SafetyCheck;
-  aiReasoning: string;
-  generatedAt: string;
-}
-
 export interface AnalysisPoint {
   point: string;
   detail: string;
@@ -93,7 +95,7 @@ export interface SafetyCheck {
 
 export interface DrugInteraction {
   type: "drug-drug" | "drug-supplement" | "supplement-supplement";
-  severity: "minor" | "moderate" | "major" | "critical";
+  severity: "minor" | "moderate" | "major" | "critical"; // Assuming these are different from RiskLevel
   description: string;
   recommendation: string;
   source: string;
@@ -133,6 +135,8 @@ export type EvidenceLevel =
 
 export type RiskLevel = "NONE" | "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
 
+// --- START: Unified Interaction and Stack Types ---
+
 export interface InteractionDetail {
   type:
     | "Drug-Drug"
@@ -142,7 +146,7 @@ export interface InteractionDetail {
   severity: RiskLevel;
   message: string;
   mechanism?: string;
-  evidenceSources: Array<{
+  evidenceSources?: Array<{
     badge: string;
     text: string;
   }>;
@@ -156,19 +160,19 @@ export interface NutrientWarning {
   unit: string;
   risk: string;
   percentOfLimit: number;
+  severity: RiskLevel;
   recommendation: string;
 }
 
-export interface StackInteraction {
-  riskLevel: RiskLevel;
+export interface StackInteractionResult {
+  overallRiskLevel: RiskLevel;
   interactions: InteractionDetail[];
   nutrientWarnings?: NutrientWarning[];
   overallSafe: boolean;
 }
 
-export interface StackInteractionResult extends StackInteraction {}
-
 export interface ProductAnalysis {
+  productId?: string;
   overallScore: number;
   categoryScores: CategoryScores;
   strengths: AnalysisPoint[];
@@ -177,21 +181,79 @@ export interface ProductAnalysis {
     goodFor: string[];
     avoidIf: string[];
   };
-  aiReasoning?: string;
-  stackInteraction?: StackInteraction; // NEW: Added
-  generatedAt: string;
+  alternatives?: Alternative[];
+  safetyCheck?: SafetyCheck;
+  aiReasoning: string;
+  stackInteraction?: StackInteractionResult;
+  generatedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// --- END: Unified Interaction and Stack Types ---
+
+export interface Alternative {
+  name: string;
+  brand: string;
+  reasonForSuggestion: string;
+  priceRange: string;
+  link?: string;
+}
+
+export interface CategoryScores {
+  ingredients: number;
+  bioavailability: number;
+  dosage: number;
+  purity: number;
+  value: number;
 }
 
 export interface UserStack {
   id: string;
+  user_id: string;
   item_id: string;
   name: string;
   type: "medication" | "supplement";
   dosage: string;
   frequency: string;
+  brand?: string;
+  imageUrl?: string;
   ingredients?: Array<{
     name: string;
     amount?: number;
     unit?: string;
   }>;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
 }
+
+export interface HealthGoal {
+  name: string;
+}
+
+export interface HealthCondition {
+  name: string;
+}
+
+export interface Medication {
+  name: string;
+}
+
+export interface Allergy {
+  name: string;
+}
+
+export interface GeneticProfile {
+  // Define structure based on your needs
+}
+
+export interface NotificationSettings {
+  // Define structure based on your needs
+}
+
+export type AuthError = {
+  message: string;
+  code: string;
+  originalError?: any; // NEW: Added optional originalError
+};

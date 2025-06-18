@@ -1,118 +1,102 @@
 // src/navigation/AppNavigator.tsx
-import React, { useRef } from "react";
-import { NavigationContainer } from "@react-navigation/native";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
+// This file defines the main application navigator, which includes both authentication and main app screens.
 
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createStackNavigator } from "@react-navigation/stack";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuth } from "../hooks/useAuth";
 import { AuthNavigator } from "./AuthNavigator";
+import { WelcomeScreen } from "../screens/auth/WelcomeScreen";
 import { HomeScreen } from "../screens/home/HomeScreen";
 import { ScanScreen } from "../screens/scan/ScanScreen";
-import { AIScreen } from "../screens/ai/AIScreen";
 import { MyStackScreen } from "../screens/stack/MyStackScreen";
+import { AIScreen } from "../screens/ai/AIScreen";
 import { ProfileScreen } from "../screens/profile/ProfileScreen";
-import { useAuth } from "../hooks/useAuth";
 import { COLORS } from "../constants";
 
+const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
-const Stack = createNativeStackNavigator();
 
-const MainTabNavigator = () => {
-  const navigationRef = useRef<any>(null);
-
+// Bottom tab navigator for main app screens
+const MainTabs = () => {
   return (
     <Tab.Navigator
-      ref={navigationRef}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused, color, size }) => {
-          let iconComponent: React.ElementType;
-          let iconName: string;
+          let iconName;
 
           if (route.name === "Home") {
             iconName = focused ? "home" : "home-outline";
-            iconComponent = Ionicons;
           } else if (route.name === "Scan") {
             iconName = focused ? "scan" : "scan-outline";
-            iconComponent = Ionicons;
-          } else if (route.name === "AI") {
-            iconName = focused
-              ? "chatbubble-ellipses"
-              : "chatbubble-ellipses-outline";
-            iconComponent = Ionicons;
           } else if (route.name === "Stack") {
-            iconName = "inventory";
-            iconComponent = MaterialIcons;
+            iconName = focused ? "layers" : "layers-outline";
+          } else if (route.name === "AI") {
+            iconName = focused ? "chatbubble" : "chatbubble-outline";
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
-            iconComponent = Ionicons;
           }
 
-          return React.createElement(iconComponent, {
-            name: iconName,
-            size: size,
-            color: color,
-          });
+          return <Ionicons name={iconName as any} size={size} color={color} />;
         },
         tabBarActiveTintColor: COLORS.primary,
-        tabBarInactiveTintColor: COLORS.gray400,
-        tabBarStyle: {
-          backgroundColor: COLORS.background,
-          borderTopWidth: 1,
-          borderTopColor: COLORS.gray200,
-          paddingBottom: 8,
-          paddingTop: 8,
-          height: 88,
-        },
-        tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: "500",
-        },
+        tabBarInactiveTintColor: COLORS.textSecondary,
         headerShown: false,
       })}
     >
-      <Tab.Screen name="Home" options={{ tabBarLabel: "Home" }}>
-        {(props) => <HomeScreen {...props} navigationRef={navigationRef} />}
-      </Tab.Screen>
-      <Tab.Screen
-        name="Scan"
-        component={ScanScreen}
-        options={{ tabBarLabel: "Scan" }}
-      />
-      <Tab.Screen
-        name="AI"
-        component={AIScreen}
-        options={{ tabBarLabel: "AI Chat" }}
-      />
-      <Tab.Screen
-        name="Stack"
-        component={MyStackScreen}
-        options={{ tabBarLabel: "My Stack" }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ tabBarLabel: "Profile" }}
-      />
+      <Tab.Screen name="Home" component={HomeScreen} />
+      <Tab.Screen name="Scan" component={ScanScreen} />
+      <Tab.Screen name="Stack" component={MyStackScreen} />
+      <Tab.Screen name="AI" component={AIScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };
 
+// Root Navigator that switches between Auth and Main based on authentication state
 export const AppNavigator = () => {
   const { user, loading } = useAuth();
 
+  // Create a ref to track if this is the first render
+  const isFirstRender = React.useRef(true);
+
+  // Use this effect to handle the navigation reset only when auth state changes
+  React.useEffect(() => {
+    // Skip the first render to avoid unnecessary resets
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+
+    // Log the auth state change for debugging
+    console.log("Auth state changed, user:", user ? "logged in" : "logged out");
+  }, [user]);
+
   if (loading) {
+    // You could return a loading screen here
     return null;
   }
 
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {user ? (
-          <Stack.Screen name="MainApp" component={MainTabNavigator} />
-        ) : (
-          <Stack.Screen name="Auth" component={AuthNavigator} />
-        )}
-      </Stack.Navigator>
+      {user ? (
+        <Stack.Navigator>
+          <Stack.Screen
+            name="MainTabs"
+            component={MainTabs}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Welcome"
+            component={WelcomeScreen}
+            options={{ headerShown: false }}
+          />
+        </Stack.Navigator>
+      ) : (
+        <AuthNavigator />
+      )}
     </NavigationContainer>
   );
 };

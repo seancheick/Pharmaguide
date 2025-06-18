@@ -1,19 +1,19 @@
+// src/screens/scan/ScanScreen.tsx
 import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
-  TouchableOpacity,
   Alert,
   ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Button } from "../../components/common";
+import { Button, AnimatedTouchable } from "../../components/common";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { ProductAnalysisResults } from "./ProductAnalysisResults";
-import { productService } from "../../services/products"; // Correct import for productService instance
-import { useStackStore } from "../../stores/stackStore"; // NEW: Import useStackStore
+import { productService } from "../../services/products";
+import { useStackStore } from "../../stores/stackStore";
 import type { Product, ProductAnalysis } from "../../types";
 import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
 
@@ -22,10 +22,9 @@ type ScanScreenState = "idle" | "scanning" | "processing" | "results";
 export const ScanScreen = () => {
   const [screenState, setScreenState] = useState<ScanScreenState>("idle");
   const [product, setProduct] = useState<Product | null>(null);
-  const [analysis, setAnalysis] = useState<ProductAnalysis | null>(null); // Changed to ProductAnalysis from Partial<ProductAnalysis>
+  const [analysis, setAnalysis] = useState<ProductAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  // NEW: Get the stack from the store
   const { stack } = useStackStore();
 
   const startScanning = () => {
@@ -39,10 +38,9 @@ export const ScanScreen = () => {
     setIsLoading(true);
 
     try {
-      // UPDATED: Pass the user's stack to analyzeScannedProduct
-      const result = await productService.analyzeScannedProduct(barcode, stack); // Pass stack
+      const result = await productService.analyzeScannedProduct(barcode, stack);
       setProduct(result.product);
-      setAnalysis(result.analysis); // Now analysis will be a full ProductAnalysis with stackInteraction
+      setAnalysis(result.analysis);
       setScreenState("results");
       console.log(
         "✅ Analysis complete - Score:",
@@ -84,6 +82,22 @@ export const ScanScreen = () => {
     setScreenState("idle");
   };
 
+  const renderIdleState = () => (
+    <View style={styles.startScanContainer}>
+      <AnimatedTouchable onPress={startScanning} style={styles.startScanButton}>
+        <Ionicons name="scan" size={48} color={COLORS.background} />
+        {/* Ensures Text is inside <Text> component */}
+        <Text style={styles.startScanText}>Tap to Scan</Text>
+      </AnimatedTouchable>
+      <Text style={styles.instructionText}>
+        Scan a medication barcode to check for interactions
+      </Text>
+    </View>
+  );
+
+  // --- START: Conditional Rendering Logic ---
+  // This is the crucial part that was likely missing or incorrectly structured.
+  // We return a component based on the current screenState.
   if (screenState === "scanning") {
     return (
       <BarcodeScanner
@@ -94,21 +108,34 @@ export const ScanScreen = () => {
   }
 
   if (screenState === "processing") {
+    // The headerBar is integrated directly into this full-screen view
     return (
-      <View style={styles.processingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.processingTitle}>Analyzing Product...</Text>
-        <Text style={styles.processingSubtitle}>
-          🔍 Fetching product data{"\n"}
-          🧠 Running quality analysis{"\n"}
-          📊 Calculating scores with variety
-        </Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.headerBar}>
+          <AnimatedTouchable onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+          </AnimatedTouchable>
+          <AnimatedTouchable style={styles.helpIconButton}>
+            <Ionicons
+              name="help-circle-outline"
+              size={24}
+              color={COLORS.textPrimary}
+            />
+          </AnimatedTouchable>
+        </View>
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Analyzing product...</Text>
+            <Text style={styles.loadingSubtext}>This may take a moment</Text>
+          </View>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  // Changed to ProductAnalysis from Partial<ProductAnalysis> for the check
   if (screenState === "results" && product && analysis) {
+    // The headerBar is part of ProductAnalysisResults component's internal rendering
     return (
       <ProductAnalysisResults
         product={product}
@@ -118,10 +145,30 @@ export const ScanScreen = () => {
       />
     );
   }
+  // --- END: Conditional Rendering Logic ---
 
-  // Default idle state
+  // If none of the above states are met, it defaults to the idle state.
   return (
     <SafeAreaView style={styles.container}>
+      {screenState !== "idle" && (
+        <View style={styles.header}>
+          <AnimatedTouchable onPress={handleClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+          </AnimatedTouchable>
+        </View>
+      )}
+
+      {isLoading && (
+        <View style={styles.loadingOverlay}>
+          <View style={styles.loadingCard}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <Text style={styles.loadingText}>Analyzing product...</Text>
+            <Text style={styles.loadingSubtext}>This may take a moment</Text>
+          </View>
+        </View>
+      )}
+
+      {/* This is the main UI for the idle state */}
       <View style={styles.content}>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
@@ -181,20 +228,24 @@ export const ScanScreen = () => {
         </View>
 
         <View style={styles.actions}>
-          <Button
-            title="Start Scanning"
-            onPress={startScanning}
-            variant="primary"
-            size="large"
-            style={styles.scanButton}
-            icon={<Ionicons name="scan" size={20} color={COLORS.background} />}
-          />
+          <AnimatedTouchable onPress={startScanning} style={styles.scanButton}>
+            <Button
+              title="Start Scanning"
+              onPress={startScanning}
+              variant="primary"
+              size="large"
+              icon={
+                <Ionicons name="scan" size={20} color={COLORS.background} />
+              }
+            />
+          </AnimatedTouchable>
 
-          <TouchableOpacity style={styles.helpButton}>
+          <AnimatedTouchable style={styles.helpButton}>
+            {/* Ensures Text is inside <Text> component */}
             <Text style={styles.helpText}>
               ✨ Scores now vary by product quality!
             </Text>
-          </TouchableOpacity>
+          </AnimatedTouchable>
         </View>
       </View>
     </SafeAreaView>
@@ -289,24 +340,72 @@ const styles = StyleSheet.create({
     color: COLORS.success,
     fontWeight: TYPOGRAPHY.weights.medium,
   },
-  processingContainer: {
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingCard: {
+    backgroundColor: COLORS.background,
+    borderRadius: 20,
+    padding: 32,
+    alignItems: "center",
+    minWidth: 250,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  loadingSubtext: {
+    marginTop: 8,
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.textSecondary,
+  },
+  startScanContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: COLORS.background,
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
   },
-  processingTitle: {
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.textPrimary,
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.md,
+  startScanButton: {
+    backgroundColor: COLORS.primary,
+    padding: SPACING.xl,
+    borderRadius: SPACING.xl,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+    shadowColor: COLORS.gray900,
   },
-  processingSubtitle: {
+  startScanText: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: "600",
+    color: COLORS.background,
+  },
+  headerBar: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+  },
+  closeButton: {
+    padding: SPACING.sm,
+  },
+  helpIconButton: {
+    padding: SPACING.sm,
+  },
+  instructionText: {
+    marginTop: SPACING.xl,
     fontSize: TYPOGRAPHY.sizes.base,
     color: COLORS.textSecondary,
     textAlign: "center",
-    lineHeight: 24,
+    paddingHorizontal: SPACING.lg,
   },
 });

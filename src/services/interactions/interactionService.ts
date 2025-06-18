@@ -1,3 +1,4 @@
+// services/interaction/interactionService.ts
 import { CRITICAL_INTERACTIONS, NUTRIENT_LIMITS } from "../../constants";
 import type {
   Product,
@@ -5,6 +6,7 @@ import type {
   InteractionDetail,
   RiskLevel,
   StackInteractionResult,
+  NutrientWarning, // Import NutrientWarning type
 } from "../../types";
 
 export class InteractionService {
@@ -21,7 +23,7 @@ export class InteractionService {
     healthProfile?: any // Keep this if you plan to use it for future checks
   ): Promise<StackInteractionResult> {
     const interactions: InteractionDetail[] = [];
-    const nutrientWarnings: any[] = []; // This type could be more specific later
+    const nutrientWarnings: NutrientWarning[] = []; // Use NutrientWarning type
     let highestRisk: RiskLevel = "NONE";
 
     // Check interactions with each item in stack
@@ -37,11 +39,12 @@ export class InteractionService {
     const nutrientCheck = await this.checkNutrientLimits(product, userStack);
     if (nutrientCheck.warnings.length > 0) {
       nutrientWarnings.push(...nutrientCheck.warnings);
+      // The nutrientCheck.riskLevel itself is the highest risk from nutrient warnings
       highestRisk = this.escalateRisk(highestRisk, nutrientCheck.riskLevel);
     }
 
     return {
-      riskLevel: highestRisk,
+      overallRiskLevel: highestRisk, // Use overallRiskLevel as per the unified type
       interactions,
       nutrientWarnings,
       overallSafe: highestRisk === "NONE" || highestRisk === "LOW",
@@ -56,22 +59,17 @@ export class InteractionService {
     const stackName = stackItem.name.toLowerCase();
 
     // Check our critical interactions database
-    // Ensure CRITICAL_INTERACTIONS is structured correctly in constants,
-    // e.g., keys are lowercase and consistent.
     for (const [drug, data] of Object.entries(CRITICAL_INTERACTIONS)) {
       if (stackName.includes(drug.toLowerCase())) {
-        // Check if stack item is the 'drug' part
         for (const supplement of data.supplements || []) {
           if (productName.includes(supplement.toLowerCase())) {
-            // Check if product is the 'supplement' part
             return {
-              type: "Drug-Supplement", // Or Drug-Drug if you add that logic
-              severity: data.severity as RiskLevel, // Cast to RiskLevel
+              type: "Drug-Supplement",
+              severity: data.severity as RiskLevel,
               message: `${product.name} may interact with ${stackItem.name}`,
               mechanism: data.mechanism,
               evidenceSources: [
                 {
-                  // Ensure your types allow this structure
                   badge: "🔵",
                   text: `FDA: ${data.evidence}`,
                 },
@@ -82,7 +80,6 @@ export class InteractionService {
           }
         }
       }
-      // Also check if 'product' is the drug and 'stackItem' is the supplement
       if (productName.includes(drug.toLowerCase())) {
         for (const supplement of data.supplements || []) {
           if (stackName.includes(supplement.toLowerCase())) {
@@ -103,36 +100,37 @@ export class InteractionService {
           }
         }
       }
-      // Add logic for Drug-Drug interactions if CRITICAL_INTERACTIONS contains medication names for 'medications' key
     }
 
     return null;
   }
 
-  private async checkNutrientLimits(product: Product, userStack: UserStack[]) {
-    const warnings: any[] = [];
-    let riskLevel: RiskLevel = "NONE";
+  // Updated to return NutrientWarning[]
+  private async checkNutrientLimits(
+    product: Product,
+    userStack: UserStack[]
+  ): Promise<{ warnings: NutrientWarning[]; riskLevel: RiskLevel }> {
+    const warnings: NutrientWarning[] = []; // Use NutrientWarning type
+    let highestNutrientRisk: RiskLevel = "NONE"; // Track highest risk from nutrient warnings
 
-    // Calculate total nutrients across stack
     const nutrients: {
       [key: string]: { total: number; unit: string; sources: string[] };
-    } = {}; // More specific type for nutrients
+    } = {};
 
-    // Add nutrients from existing stack
     for (const item of userStack) {
       if (item.ingredients) {
         for (const ingredient of item.ingredients) {
           const nutrientName = ingredient.name.toLowerCase();
-          // Assuming ingredient.amount and ingredient.unit are available and valid numbers
+          const nutrientLimit = NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
           if (
-            NUTRIENT_LIMITS[nutrientName] &&
+            nutrientLimit &&
             typeof ingredient.amount === "number" &&
             ingredient.amount > 0
           ) {
             if (!nutrients[nutrientName]) {
               nutrients[nutrientName] = {
                 total: 0,
-                unit: NUTRIENT_LIMITS[nutrientName].unit,
+                unit: nutrientLimit.unit,
                 sources: [],
               };
             }
@@ -143,61 +141,60 @@ export class InteractionService {
       }
     }
 
-    // Add nutrients from new product
     if (product.ingredients) {
       for (const ingredient of product.ingredients) {
         const nutrientName = ingredient.name.toLowerCase();
-        // Assuming ingredient.amount and ingredient.unit are available and valid numbers
+        const nutrientLimit = NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
         if (
-          NUTRIENT_LIMITS[nutrientName] &&
+          nutrientLimit &&
           typeof ingredient.amount === "number" &&
           ingredient.amount > 0
         ) {
           if (!nutrients[nutrientName]) {
             nutrients[nutrientName] = {
               total: 0,
-              unit: NUTRIENT_LIMITS[nutrientName].unit,
+              unit: nutrientLimit.unit,
               sources: [],
             };
           }
           nutrients[nutrientName].total += ingredient.amount;
-          nutrients[nutrientName].sources.push(product.name); // Add the new product as a source
+          nutrients[nutrientName].sources.push(product.name);
 
-          const newTotal = nutrients[nutrientName].total; // Use the updated total
-          const limit = NUTRIENT_LIMITS[nutrientName];
+          const currentTotal = nutrients[nutrientName].total;
+          const limit = nutrientLimit;
 
-          if (newTotal > limit.ul) {
-            // Check severity based on how much it exceeds the limit
+          if (currentTotal > limit.ul) {
             let currentWarningSeverity: RiskLevel = "LOW";
-            const percentExceeded = (newTotal / limit.ul) * 100;
-            if (percentExceeded > 200)
-              currentWarningSeverity = "CRITICAL"; // Over 200% of UL
-            else if (percentExceeded > 150)
-              currentWarningSeverity = "HIGH"; // Over 150% of UL
-            else if (percentExceeded > 110) currentWarningSeverity = "MODERATE"; // Over 110% of UL
+            const percentExceeded = (currentTotal / limit.ul) * 100;
+            if (percentExceeded > 200) currentWarningSeverity = "CRITICAL";
+            else if (percentExceeded > 150) currentWarningSeverity = "HIGH";
+            else if (percentExceeded > 110) currentWarningSeverity = "MODERATE";
 
             warnings.push({
               nutrient: nutrientName,
-              currentTotal: newTotal,
+              currentTotal: currentTotal,
               upperLimit: limit.ul,
               unit: limit.unit,
               risk: limit.risk,
               percentOfLimit: Math.round(percentExceeded),
+              severity: currentWarningSeverity,
               recommendation: `Reduce total ${nutrientName} intake by ${
-                newTotal - limit.ul
+                currentTotal - limit.ul
               } ${limit.unit}. Consult a healthcare provider.`,
-              severity: currentWarningSeverity, // Add severity to the warning itself
             });
-            riskLevel = this.escalateRisk(riskLevel, currentWarningSeverity); // Escalate overall risk for nutrient checks
+            // Escalate the overall risk for nutrient checks
+            highestNutrientRisk = this.escalateRisk(
+              highestNutrientRisk,
+              currentWarningSeverity
+            );
           }
         }
       }
     }
 
-    return { warnings, riskLevel };
+    return { warnings, riskLevel: highestNutrientRisk };
   }
 
-  // FIXED: Renamed 'new' parameter to 'newRiskLevel'
   private escalateRisk(current: RiskLevel, newRiskLevel: RiskLevel): RiskLevel {
     const riskOrder = ["NONE", "LOW", "MODERATE", "HIGH", "CRITICAL"];
     const currentIndex = riskOrder.indexOf(current);

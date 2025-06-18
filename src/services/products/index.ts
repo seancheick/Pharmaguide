@@ -1,3 +1,4 @@
+// src/services/products/index.ts
 import { openFoodFactsService, ParsedProduct } from "./openfoodfacts";
 import { huggingfaceService } from "../ai/huggingface";
 import { interactionService } from "../interactions";
@@ -9,6 +10,15 @@ import type {
 } from "../../types";
 
 export class ProductService {
+  // Add a cache for product analysis results
+  private productCache: Map<
+    string,
+    { product: Product; analysis: ProductAnalysis; timestamp: number }
+  > = new Map();
+
+  // Cache expiration time (24 hours in milliseconds)
+  private CACHE_EXPIRATION = 24 * 60 * 60 * 1000;
+
   async analyzeScannedProduct(
     barcode: string,
     userStack?: UserStack[]
@@ -16,8 +26,33 @@ export class ProductService {
     try {
       console.log("📊 Starting product analysis for:", barcode);
 
+      // Check cache first
+      const cachedResult = this.productCache.get(barcode);
+      if (
+        cachedResult &&
+        Date.now() - cachedResult.timestamp < this.CACHE_EXPIRATION
+      ) {
+        console.log("📦 Using cached product analysis for:", barcode);
+
+        // Still check interactions even for cached products
+        if (userStack && userStack.length > 0) {
+          const stackAnalysis =
+            await interactionService.analyzeProductWithStack(
+              cachedResult.product,
+              userStack
+            );
+          cachedResult.analysis.stackInteraction = stackAnalysis;
+        }
+
+        return {
+          product: cachedResult.product,
+          analysis: cachedResult.analysis,
+        };
+      }
+
       // Step 1: Get product data from OpenFoodFacts
       const parsedProduct = await openFoodFactsService.getProductByBarcode(
+        // Capital F
         barcode
       );
 
@@ -34,85 +69,113 @@ export class ProductService {
         true
       );
 
-      // Step 4: Create full analysis with all required fields
-      const fullAnalysis: ProductAnalysis = {
-        overallScore: partialAnalysis.overallScore || 0,
-        categoryScores: partialAnalysis.categoryScores || {
-          ingredients: 0,
-          bioavailability: 0,
-          dosage: 0,
-          purity: 0,
-          value: 0,
-        },
-        strengths: partialAnalysis.strengths || [],
-        weaknesses: partialAnalysis.weaknesses || [],
-        recommendations: partialAnalysis.recommendations || {
-          goodFor: [],
-          avoidIf: [],
-        },
-        aiReasoning: partialAnalysis.aiReasoning || "Analysis in progress...",
-        generatedAt: partialAnalysis.generatedAt || new Date().toISOString(),
-      };
+      // Step 4: Add stack interaction analysis if userStack is provided
+      const analysis = await this.addStackInteractionAnalysis(
+        partialAnalysis,
+        product,
+        userStack
+      );
 
-      // Step 5: Check stack interactions if user has items in stack
-      if (userStack && userStack.length > 0) {
-        console.log("🔍 Checking interactions with user stack...");
-        const stackAnalysis = await interactionService.analyzeProductWithStack(
-          product,
-          userStack
-        );
-
-        // Add interaction data WITHOUT changing quality score
-        fullAnalysis.stackInteraction = stackAnalysis;
-
-        console.log(
-          `✅ Stack analysis complete. Risk: ${stackAnalysis.riskLevel}`
-        );
-      }
-
-      console.log("✅ Product analysis complete:", {
-        name: product.name,
-        score: fullAnalysis.overallScore,
-        found: parsedProduct.found,
-        hasInteractions: !!fullAnalysis.stackInteraction,
+      // Cache the result
+      this.productCache.set(barcode, {
+        product,
+        analysis,
+        timestamp: Date.now(),
       });
 
-      return { product, analysis: fullAnalysis };
+      console.log("✅ Product analysis complete:", {
+        found: true,
+        hasInteractions: analysis.stackInteraction?.overallRiskLevel !== "NONE",
+        name: product.name,
+        score: analysis.overallScore,
+      });
+
+      return { product, analysis };
     } catch (error) {
-      console.error("Product analysis error:", error);
+      console.error("❌ Product analysis error:", error);
 
       // Return a fallback product and analysis
       const fallbackProduct = this.createNotFoundProduct(barcode);
-      const fallbackAnalysis: ProductAnalysis = {
-        overallScore: 0,
-        categoryScores: {
-          ingredients: 0,
-          bioavailability: 0,
-          dosage: 0,
-          purity: 0,
-          value: 0,
-        },
-        strengths: [],
-        weaknesses: [
-          {
-            point: "Product not found",
-            detail:
-              "Unable to analyze this product. It may not be in our database.",
-            importance: "high",
-            category: "quality",
-          },
-        ],
-        recommendations: {
-          goodFor: [],
-          avoidIf: [],
-        },
-        aiReasoning:
-          "Product not found in database. Please try scanning another product.",
-        generatedAt: new Date().toISOString(),
-      };
+      const fallbackAnalysis = this.createFallbackAnalysis();
 
       return { product: fallbackProduct, analysis: fallbackAnalysis };
     }
+  }
+
+  // ADD THIS METHOD - IT'S MISSING!
+  private async addStackInteractionAnalysis(
+    partialAnalysis: Partial<ProductAnalysis>,
+    product: Product,
+    userStack?: UserStack[]
+  ): Promise<ProductAnalysis> {
+    // Create full analysis with all required fields
+    const fullAnalysis: ProductAnalysis = {
+      overallScore: partialAnalysis.overallScore || 0,
+      categoryScores: partialAnalysis.categoryScores || {
+        ingredients: 0,
+        bioavailability: 0,
+        dosage: 0,
+        purity: 0,
+        value: 0,
+      },
+      strengths: partialAnalysis.strengths || [],
+      weaknesses: partialAnalysis.weaknesses || [],
+      recommendations: partialAnalysis.recommendations || {
+        goodFor: [],
+        avoidIf: [],
+      },
+      aiReasoning: partialAnalysis.aiReasoning || "Analysis in progress...",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      generatedAt: partialAnalysis.generatedAt,
+    };
+
+    // Add stack interaction analysis if userStack is provided
+    if (userStack && userStack.length > 0) {
+      console.log("🔍 Checking interactions with user stack...");
+      const stackAnalysis = await interactionService.analyzeProductWithStack(
+        product,
+        userStack
+      );
+      fullAnalysis.stackInteraction = stackAnalysis;
+      console.log(
+        `✅ Stack analysis complete. Risk: ${stackAnalysis.overallRiskLevel}`
+      );
+    }
+
+    return fullAnalysis;
+  }
+
+  // ADD THIS METHOD - IT'S MISSING!
+  private createFallbackAnalysis(): ProductAnalysis {
+    return {
+      overallScore: 0,
+      categoryScores: {
+        ingredients: 0,
+        bioavailability: 0,
+        dosage: 0,
+        purity: 0,
+        value: 0,
+      },
+      strengths: [],
+      weaknesses: [
+        {
+          point: "Product not found",
+          detail:
+            "Unable to analyze this product. It may not be in our database.",
+          importance: "high",
+          category: "quality",
+        },
+      ],
+      recommendations: {
+        goodFor: [],
+        avoidIf: [],
+      },
+      aiReasoning:
+        "Product not found in database. Please try scanning another product.",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   private convertToProduct(parsedProduct: ParsedProduct): Product {
@@ -147,24 +210,24 @@ export class ProductService {
     };
   }
 
-  private guessIngredientForm(ingredientName: string): any {
+  private guessIngredientForm(ingredientName: string): string {
     const name = ingredientName.toLowerCase();
-
-    // Premium forms detection
-    if (name.includes("methylcobalamin")) return "methylcobalamin";
-    if (name.includes("methylfolate") || name.includes("5-mthf"))
-      return "methylfolate";
-    if (name.includes("chelated") || name.includes("glycinate"))
-      return "chelated";
-    if (name.includes("liposomal")) return "liposomal";
-    if (name.includes("citrate")) return "citrate";
-
-    // Poor forms detection
-    if (name.includes("oxide")) return "oxide";
-    if (name.includes("cyanocobalamin")) return "cyanocobalamin";
-    if (name.includes("folic acid")) return "folic_acid";
-    if (name.includes("carbonate")) return "carbonate";
-
+    const formMap: { [key: string]: string } = {
+      methylcobalamin: "methylcobalamin",
+      methylfolate: "methylfolate",
+      "5-mthf": "methylfolate",
+      chelated: "chelated",
+      glycinate: "chelated",
+      liposomal: "liposomal",
+      citrate: "citrate",
+      oxide: "oxide",
+      cyanocobalamin: "cyanocobalamin",
+      "folic acid": "folic_acid",
+      carbonate: "carbonate",
+    };
+    for (const [key, value] of Object.entries(formMap)) {
+      if (name.includes(key)) return value;
+    }
     return "other";
   }
 
@@ -172,26 +235,17 @@ export class ProductService {
     ingredientName: string
   ): "low" | "medium" | "high" {
     const name = ingredientName.toLowerCase();
-
-    // High bioavailability indicators
-    if (
-      name.includes("liposomal") ||
-      name.includes("methylated") ||
-      name.includes("chelated") ||
-      name.includes("glycinate")
-    ) {
-      return "high";
-    }
-
-    // Low bioavailability indicators
-    if (
-      name.includes("oxide") ||
-      name.includes("carbonate") ||
-      name.includes("sulfate")
-    ) {
-      return "low";
-    }
-
+    const highBio = [
+      "liposomal",
+      "methylcobalamin",
+      "methylfolate",
+      "chelated",
+      "glycinate",
+      "citrate",
+    ];
+    const lowBio = ["oxide", "carbonate", "cyanocobalamin", "folic acid"];
+    if (highBio.some((term) => name.includes(term))) return "high";
+    if (lowBio.some((term) => name.includes(term))) return "low";
     return "medium";
   }
 
@@ -208,7 +262,7 @@ export class ProductService {
       food: "specialty",
     };
 
-    return categoryMap[category] || "specialty";
+    return categoryMap[category as keyof typeof categoryMap] || "specialty";
   }
 
   private createNotFoundProduct(barcode: string): Product {

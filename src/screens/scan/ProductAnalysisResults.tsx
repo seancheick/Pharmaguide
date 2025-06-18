@@ -1,20 +1,28 @@
-import React, { useState, useEffect } from "react"; // Added useEffect
+// src/screens/scan/ProductAnalysisResults.tsx
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Image,
-  TouchableOpacity,
   Alert,
   Platform,
+  ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { Button } from "../../components/common";
-import type { Product, ProductAnalysis, RiskLevel } from "../../types";
+import { Button, AnimatedTouchable } from "../../components/common";
+import type {
+  Product,
+  ProductAnalysis,
+  RiskLevel,
+  StackInteractionResult,
+} from "../../types";
 import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
 import { useStackStore } from "../../stores/stackStore";
-import AsyncStorage from "@react-native-async-storage/async-storage"; // NEW: Import AsyncStorage
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { gamificationService } from "../../services/gamification/gamificationService";
 
 interface ProductAnalysisResultsProps {
   product: Product;
@@ -31,6 +39,7 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
 }) => {
   const [savedToStack, setSavedToStack] = useState(false);
   const { addToStack } = useStackStore();
+  const [loading, setLoading] = useState(false);
 
   const getScoreColor = (score: number) => {
     if (score >= 80) return COLORS.success;
@@ -46,7 +55,6 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
     return "Poor";
   };
 
-  // Fixed type safety as per Copilot's suggestion
   const getRiskColor = (risk: RiskLevel) => {
     switch (risk) {
       case "CRITICAL":
@@ -54,7 +62,7 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
       case "HIGH":
         return COLORS.warning;
       case "MODERATE":
-        return COLORS.accent || COLORS.warning; // Fallback if accent doesn't exist
+        return COLORS.accent || COLORS.warning;
       case "LOW":
         return COLORS.secondary;
       case "NONE":
@@ -64,7 +72,6 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
   };
 
   const handleAddToStack = async () => {
-    // Check for critical interaction before adding
     if (analysis.stackInteraction?.overallRiskLevel === "CRITICAL") {
       Alert.alert(
         "Critical Interaction Detected",
@@ -77,9 +84,7 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
     const itemToAdd = {
       item_id: product.id,
       name: product.name,
-      type: (product.category === "medication"
-        ? "medication"
-        : "supplement") as "medication" | "supplement",
+      type: "supplement" as "medication" | "supplement",
       dosage: product.dosage || "As directed",
       frequency: "Daily",
       ingredients: product.ingredients.map((ing) => ({
@@ -87,6 +92,8 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
         amount: ing.amount,
         unit: ing.unit,
       })),
+      brand: product.brand,
+      imageUrl: product.imageUrl,
     };
 
     try {
@@ -118,53 +125,126 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
     );
   };
 
-  // NEW: saveToRecentScans function
+  const determineEvidenceLevel = (
+    anal: ProductAnalysis
+  ): "A" | "B" | "C" | "D" => {
+    if (!anal.stackInteraction || !anal.stackInteraction.interactions) {
+      return "D";
+    }
+
+    if (
+      anal.stackInteraction.interactions.some((i) =>
+        i.evidenceSources?.some((s) => s.text.includes("Clinical"))
+      )
+    ) {
+      return "A";
+    }
+    if (
+      anal.stackInteraction.interactions.some((i) =>
+        i.evidenceSources?.some((s) => s.text.includes("Case"))
+      )
+    ) {
+      return "B";
+    }
+    if (anal.stackInteraction.interactions.length > 0) {
+      return "C";
+    }
+    return "D";
+  };
+
   const saveToRecentScans = async (prod: Product, anal: ProductAnalysis) => {
     try {
-      const existingScans = await AsyncStorage.getItem("recent_scans");
+      const existingScans = await AsyncStorage.getItem(
+        "pharmaguide_recent_scans"
+      );
       const scans = existingScans ? JSON.parse(existingScans) : [];
 
+      const evidenceLevel = determineEvidenceLevel(anal);
+
       const newScan = {
-        id: Date.now().toString(), // Unique ID for the scan record
+        id: Date.now().toString(),
         name: prod.name,
         brand: prod.brand,
         imageUrl: prod.imageUrl,
         score: anal.overallScore,
-        // Check for stackInteraction existence and its riskLevel
         hasInteraction: anal.stackInteraction
           ? anal.stackInteraction.overallRiskLevel !== "NONE"
           : false,
+        evidence: evidenceLevel,
         scannedAt: new Date().toISOString(),
       };
 
-      // Add to beginning, keep only last 20 scans
-      const updatedScans = [newScan, ...scans].slice(0, 20);
-      await AsyncStorage.setItem("recent_scans", JSON.stringify(updatedScans));
+      const updatedScans = [newScan, ...scans].slice(0, 50);
+      await AsyncStorage.setItem(
+        "pharmaguide_recent_scans",
+        JSON.stringify(updatedScans)
+      );
       console.log("Scan saved to recent scans:", prod.name);
     } catch (error) {
       console.error("Error saving recent scan:", error);
     }
   };
 
-  // NEW: Call saveToRecentScans when analysis completes
+  const updateGamification = async () => {
+    try {
+      await gamificationService.awardPoints("DAILY_SCAN");
+      await gamificationService.updateStreak();
+
+      if (analysis.overallScore >= 70) {
+        await gamificationService.awardPoints("SAFE_PRODUCT");
+      }
+
+      if (
+        analysis.stackInteraction &&
+        analysis.stackInteraction.overallRiskLevel !== "NONE"
+      ) {
+        await gamificationService.awardPoints("INTERACTION_FOUND");
+      }
+    } catch (error) {
+      console.error("Error updating gamification:", error);
+    }
+  };
+
   useEffect(() => {
     if (product && analysis) {
       saveToRecentScans(product, analysis);
+      updateGamification();
     }
-  }, [product, analysis]); // Dependencies: run when product or analysis changes
+  }, [product, analysis]);
+
+  useEffect(() => {
+    setLoading(!analysis);
+  }, [analysis]);
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Analysis Results</Text>
-        <View style={{ width: 24 }} />
-      </View>
+    <ScrollView style={styles.container}>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>
+            Analyzing product interactions...
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.header}>
+          <AnimatedTouchable onPress={onClose} style={styles.headerButton}>
+            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+          </AnimatedTouchable>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <AnimatedTouchable
+            onPress={handleAddToStack}
+            style={styles.headerButton}
+          >
+            <Ionicons
+              name={savedToStack ? "bookmark" : "bookmark-outline"}
+              size={24}
+              color={savedToStack ? COLORS.primary : COLORS.textPrimary}
+            />
+          </AnimatedTouchable>
+        </View>
+      )}
+
+      <View style={styles.content}>
         {/* Product Info */}
         <View style={styles.productCard}>
           {product.imageUrl ? (
@@ -217,7 +297,7 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
           </View>
         )}
 
-        {/* Stack Interaction Alert - Fixed with proper optional chaining */}
+        {/* Stack Interaction Alert */}
         {analysis.stackInteraction &&
           analysis.stackInteraction.overallRiskLevel !== "NONE" &&
           analysis.stackInteraction.interactions && (
@@ -280,6 +360,36 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
                   </View>
                 )
               )}
+
+              {/* Display Nutrient Warnings if available */}
+              {analysis.stackInteraction.nutrientWarnings &&
+                analysis.stackInteraction.nutrientWarnings.length > 0 && (
+                  <View style={styles.nutrientWarningsContainer}>
+                    <Text style={styles.nutrientWarningsTitle}>
+                      Nutrient Overload Warnings:
+                    </Text>
+                    {analysis.stackInteraction.nutrientWarnings.map(
+                      (warning, index) => (
+                        <View
+                          key={`nutrient-warning-${index}`}
+                          style={styles.nutrientWarningItem}
+                        >
+                          <Text style={styles.nutrientWarningText}>
+                            ⚠️{" "}
+                            <Text style={{ fontWeight: "bold" }}>
+                              {warning.nutrient}
+                            </Text>
+                            : Current {warning.currentTotal} {warning.unit} (
+                            {warning.percentOfLimit}% of UL)
+                          </Text>
+                          <Text style={styles.nutrientWarningRecommendation}>
+                            Recommendation: {warning.recommendation}
+                          </Text>
+                        </View>
+                      )
+                    )}
+                  </View>
+                )}
 
               {/* Educational Disclaimer */}
               <View style={styles.disclaimerContainer}>
@@ -372,14 +482,14 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
             icon={<Ionicons name="scan" size={20} color={COLORS.background} />}
           />
 
-          {/* Dual button design - Fixed gap issue for React Native compatibility */}
+          {/* Dual button design */}
           <View style={styles.dualButtonContainer}>
             <TouchableOpacity
               style={[
                 styles.dualButton,
                 styles.stackButton,
                 savedToStack && styles.stackButtonSaved,
-                styles.leftButton, // Added for margin handling
+                styles.leftButton,
               ]}
               onPress={handleAddToStack}
               disabled={savedToStack}
@@ -412,8 +522,8 @@ export const ProductAnalysisResults: React.FC<ProductAnalysisResultsProps> = ({
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
-    </View>
+      </View>
+    </ScrollView>
   );
 };
 
@@ -431,10 +541,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: COLORS.gray200,
   },
-  headerTitle: {
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.textPrimary,
+  headerButton: {
+    padding: SPACING.sm,
+    borderRadius: SPACING.xs,
   },
   content: {
     flexGrow: 1,
@@ -669,7 +778,6 @@ const styles = StyleSheet.create({
   },
   dualButtonContainer: {
     flexDirection: "row",
-    // Removed 'gap' for compatibility
   },
   dualButton: {
     flex: 1,
@@ -682,7 +790,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
   },
   leftButton: {
-    marginRight: SPACING.sm / 2, // Replaces gap for better compatibility
+    marginRight: SPACING.sm / 2,
   },
   stackButton: {
     backgroundColor: COLORS.secondary,
@@ -692,7 +800,7 @@ const styles = StyleSheet.create({
   },
   aiButton: {
     backgroundColor: COLORS.primary,
-    marginLeft: SPACING.sm / 2, // Other half of the gap
+    marginLeft: SPACING.sm / 2,
   },
   dualButtonText: {
     color: COLORS.background,
@@ -704,7 +812,6 @@ const styles = StyleSheet.create({
   stackButtonTextSaved: {
     color: COLORS.background,
   },
-  // Stack Interaction Alert Styles
   interactionAlert: {
     backgroundColor: COLORS.backgroundSecondary,
     borderRadius: 12,
@@ -755,6 +862,31 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xs,
     lineHeight: 18,
   },
+  nutrientWarningsContainer: {
+    marginTop: SPACING.md,
+    backgroundColor: COLORS.gray100,
+    borderRadius: 8,
+    padding: SPACING.md,
+  },
+  nutrientWarningsTitle: {
+    fontSize: TYPOGRAPHY.sizes.base,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+    color: COLORS.textPrimary,
+    marginBottom: SPACING.sm,
+  },
+  nutrientWarningItem: {
+    marginBottom: SPACING.xs,
+  },
+  nutrientWarningText: {
+    fontSize: TYPOGRAPHY.sizes.sm,
+    color: COLORS.textSecondary,
+  },
+  nutrientWarningRecommendation: {
+    fontSize: TYPOGRAPHY.sizes.xs,
+    color: COLORS.textTertiary,
+    fontStyle: "italic",
+    marginTop: 2,
+  },
   disclaimerContainer: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -769,5 +901,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     lineHeight: 18,
     marginLeft: SPACING.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: SPACING.xxl,
+    minHeight: 300,
+  },
+  loadingText: {
+    marginTop: SPACING.md,
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.textSecondary,
   },
 });

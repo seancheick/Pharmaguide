@@ -1,28 +1,25 @@
+// src/screens/auth/LoginScreen.tsx
 import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  TouchableOpacity,
 } from "react-native";
-import { Button } from "../../components/common";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../hooks/useAuth";
+import { Button, Input } from "../../components/common"; // Import new components
 import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
 
-interface LoginScreenProps {
-  navigation: any;
-}
-
-export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
+export const LoginScreen = () => {
+  const navigation = useNavigation();
+  const { signInWithEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signIn } = useAuth();
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -31,78 +28,66 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ navigation }) => {
     }
 
     setLoading(true);
-    const { error } = await signIn(email.trim(), password);
-    setLoading(false);
-
-    if (error) {
-      Alert.alert("Login Failed", error.message);
+    try {
+      await signInWithEmail(email.trim(), password);
+      // Navigation happens automatically via auth state change in AppNavigator
+    } catch (error: any) {
+      Alert.alert(
+        "Login Failed",
+        error.message || "An error occurred. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to your PharmaGuide account
-            </Text>
-          </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.content}>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to continue</Text>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor={COLORS.gray400}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+        <Input
+          label="Email"
+          placeholder="email@example.com"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+          style={styles.input}
+        />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Enter your password"
-                placeholderTextColor={COLORS.gray400}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
+        <Input
+          label="Password"
+          placeholder="your password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="password"
+          style={styles.input}
+        />
 
-            <Button
-              title="Sign In"
-              onPress={handleLogin}
-              loading={loading}
-              variant="primary"
-              size="large"
-              style={styles.loginButton}
-            />
+        <Button
+          title="Sign In"
+          onPress={handleLogin}
+          loading={loading}
+          disabled={loading}
+          style={styles.button}
+        />
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <Button
-                title="Sign Up"
-                onPress={() => navigation.navigate("Signup")}
-                variant="ghost"
-                size="small"
-              />
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Signup" as never)}
+          disabled={loading}
+          style={styles.linkButton}
+        >
+          <Text style={styles.link}>Don't have an account? Sign up</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -111,15 +96,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xl,
-  },
-  header: {
-    alignItems: "center",
-    marginTop: SPACING.xxl,
-    marginBottom: SPACING.xxl,
+  content: {
+    flex: 1,
+    padding: SPACING.xl,
+    justifyContent: "center",
   },
   title: {
     fontSize: TYPOGRAPHY.sizes.xxxl,
@@ -128,45 +108,23 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.sizes.base,
+    fontSize: TYPOGRAPHY.sizes.lg,
     color: COLORS.textSecondary,
-    textAlign: "center",
-  },
-  form: {
-    flex: 1,
-  },
-  inputContainer: {
-    marginBottom: SPACING.lg,
-  },
-  label: {
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xl * 2,
   },
   input: {
-    borderWidth: 1,
-    borderColor: COLORS.gray300,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.background,
-    minHeight: 48,
+    marginBottom: SPACING.md,
   },
-  loginButton: {
+  button: {
     marginTop: SPACING.lg,
-    marginBottom: SPACING.xl,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: "auto",
+  linkButton: {
+    marginTop: SPACING.xl,
   },
-  footerText: {
+  link: {
+    color: COLORS.primary,
     fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.textSecondary,
+    textAlign: "center",
+    fontWeight: TYPOGRAPHY.weights.medium,
   },
 });

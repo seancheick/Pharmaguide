@@ -1,31 +1,29 @@
+// src/screens/auth/SignupScreen.tsx
 import React, { useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
-  TextInput,
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ScrollView,
+  TouchableOpacity,
 } from "react-native";
-import { Button } from "../../components/common";
+import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "../../hooks/useAuth";
+import { Button, Input } from "../../components/common"; // Import new components
 import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
 
-interface SignupScreenProps {
-  navigation: any;
-}
-
-export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
+export const SignupScreen = () => {
+  const navigation = useNavigation();
+  const { signUpWithEmail } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
 
   const handleSignup = async () => {
+    // Validation
     if (!email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
       return;
@@ -42,97 +40,82 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ navigation }) => {
     }
 
     setLoading(true);
-    const { error } = await signUp(email.trim(), password);
-    setLoading(false);
-
-    if (error) {
-      Alert.alert("Signup Failed", error.message);
-    } else {
+    try {
+      await signUpWithEmail(email.trim(), password);
       Alert.alert(
-        "Success",
-        "Account created! Please check your email to verify your account.",
-        [{ text: "OK", onPress: () => navigation.navigate("Login") }]
+        "Account Created",
+        "Please check your email to verify your account and then sign in.",
+        [{ text: "OK", onPress: () => navigation.navigate("Login" as never) }]
       );
+    } catch (error: any) {
+      Alert.alert(
+        "Sign Up Failed",
+        error.message || "An error occurred. Please try again."
+      );
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <Text style={styles.title}>Create Account</Text>
-            <Text style={styles.subtitle}>
-              Join PharmaGuide and start making smarter choices
-            </Text>
-          </View>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
+      <View style={styles.content}>
+        <Text style={styles.title}>Create Your Account</Text>
+        <Text style={styles.subtitle}>
+          Join us to personalize your health journey
+        </Text>
 
-          <View style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                value={email}
-                onChangeText={setEmail}
-                placeholder="Enter your email"
-                placeholderTextColor={COLORS.gray400}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-            </View>
+        <Input
+          label="Email"
+          placeholder="email@example.com"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+          style={styles.input}
+        />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Create a password (min 6 characters)"
-                placeholderTextColor={COLORS.gray400}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
+        <Input
+          label="Password"
+          placeholder="at least 6 characters"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          autoComplete="password-new"
+          style={styles.input}
+        />
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <TextInput
-                style={styles.input}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Confirm your password"
-                placeholderTextColor={COLORS.gray400}
-                secureTextEntry
-                autoCapitalize="none"
-              />
-            </View>
+        <Input
+          label="Confirm Password"
+          placeholder="re-enter your password"
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          secureTextEntry
+          autoComplete="password-new"
+          style={styles.input}
+        />
 
-            <Button
-              title="Create Account"
-              onPress={handleSignup}
-              loading={loading}
-              variant="primary"
-              size="large"
-              style={styles.signupButton}
-            />
+        <Button
+          title="Sign Up"
+          onPress={handleSignup}
+          loading={loading}
+          disabled={loading}
+          style={styles.button}
+        />
 
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account? </Text>
-              <Button
-                title="Sign In"
-                onPress={() => navigation.navigate("Login")}
-                variant="ghost"
-                size="small"
-              />
-            </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login" as never)}
+          disabled={loading}
+          style={styles.linkButton}
+        >
+          <Text style={styles.link}>Already have an account? Sign in</Text>
+        </TouchableOpacity>
+      </View>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -141,15 +124,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.background,
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.xl,
-  },
-  header: {
-    alignItems: "center",
-    marginTop: SPACING.xxl,
-    marginBottom: SPACING.xxl,
+  content: {
+    flex: 1,
+    padding: SPACING.xl,
+    justifyContent: "center",
   },
   title: {
     fontSize: TYPOGRAPHY.sizes.xxxl,
@@ -158,46 +136,23 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   subtitle: {
-    fontSize: TYPOGRAPHY.sizes.base,
+    fontSize: TYPOGRAPHY.sizes.lg,
     color: COLORS.textSecondary,
-    textAlign: "center",
-    lineHeight: 22,
-  },
-  form: {
-    flex: 1,
-  },
-  inputContainer: {
-    marginBottom: SPACING.lg,
-  },
-  label: {
-    fontSize: TYPOGRAPHY.sizes.base,
-    fontWeight: TYPOGRAPHY.weights.medium,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
+    marginBottom: SPACING.xl * 2,
   },
   input: {
-    borderWidth: 1,
-    borderColor: COLORS.gray300,
-    borderRadius: 12,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.textPrimary,
-    backgroundColor: COLORS.background,
-    minHeight: 48,
+    marginBottom: SPACING.md,
   },
-  signupButton: {
+  button: {
     marginTop: SPACING.lg,
-    marginBottom: SPACING.xl,
   },
-  footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: "auto",
+  linkButton: {
+    marginTop: SPACING.xl,
   },
-  footerText: {
+  link: {
+    color: COLORS.primary,
     fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.textSecondary,
+    textAlign: "center",
+    fontWeight: TYPOGRAPHY.weights.medium,
   },
 });

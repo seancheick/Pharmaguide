@@ -1,3 +1,4 @@
+// src/screens/scan/BarcodeScanner.tsx
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -6,18 +7,19 @@ import {
   TouchableOpacity,
   Alert,
   Dimensions,
-  SafeAreaView, // Import SafeAreaView
+  SafeAreaView,
   Animated,
   Vibration,
-  Platform, // Import Platform for OS-specific styling
+  Platform,
 } from "react-native";
 import {
   CameraView,
-  Camera, // Keeping Camera import just in case, though CameraView is used
+  Camera,
   useCameraPermissions,
   BarcodeScanningResult,
+  BarcodeType,
 } from "expo-camera";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialIcons } from "@expo/vector-icons";
 import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
 
 interface BarcodeScannerProps {
@@ -26,8 +28,17 @@ interface BarcodeScannerProps {
 }
 
 // Optimized barcode types for consumer products
-const CONSUMER_BARCODE_TYPES = ["ean13", "ean8", "upc_a", "upc_e"]; // Primary consumer product codes
-const EXTENDED_BARCODE_TYPES = [...CONSUMER_BARCODE_TYPES, "code128", "code39"]; // Backup codes (if you need to scan more general barcodes later)
+const CONSUMER_BARCODE_TYPES: BarcodeType[] = [
+  "ean13",
+  "ean8",
+  "upc_a",
+  "upc_e",
+];
+const EXTENDED_BARCODE_TYPES: BarcodeType[] = [
+  ...CONSUMER_BARCODE_TYPES,
+  "code128",
+  "code39",
+];
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   onBarcodeScanned,
@@ -38,6 +49,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [scanning, setScanning] = useState(true);
   const scanLineAnimation = useRef(new Animated.Value(0)).current;
+  const successAnimation = useRef(new Animated.Value(0)).current;
+  const successScale = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!permission?.granted) {
@@ -86,7 +99,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
     // Validate barcode format
     if (data && data.length >= 8) {
-      onBarcodeScanned(data);
+      // Show success animation
+      showSuccessAnimation(() => {
+        onBarcodeScanned(data);
+      });
     } else {
       Alert.alert("Invalid Barcode", "Please scan a valid product barcode.", [
         {
@@ -100,6 +116,24 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     }
   };
 
+  const showSuccessAnimation = (callback: () => void) => {
+    Animated.parallel([
+      Animated.timing(successAnimation, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: true,
+      }),
+      Animated.spring(successScale, {
+        toValue: 1,
+        friction: 4,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      setTimeout(callback, 500);
+    });
+  };
+
   const toggleFlash = () => {
     setFlashEnabled(!flashEnabled);
   };
@@ -107,6 +141,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const resetScanner = () => {
     setScanned(false);
     setScanning(true);
+    successAnimation.setValue(0);
+    successScale.setValue(0);
   };
 
   if (!permission) {
@@ -144,11 +180,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   });
 
   return (
-    // Wrap the entire component's return content in SafeAreaView
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.cameraContainer}>
-        {" "}
-        {/* New container for camera and overlays */}
         <CameraView
           style={styles.camera}
           facing="back"
@@ -158,12 +191,10 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           }}
           onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
         />
-        {/* Header - Repositioned inside the CameraContainer but using absolute positioning */}
-        {/* We'll use the new closeButton style to place it */}
+
+        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.headerButtonLeft} onPress={onClose}>
-            {" "}
-            {/* New style for left button */}
             <Ionicons name="close" size={24} color={COLORS.background} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Scan Product Barcode</Text>
@@ -171,8 +202,6 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             style={styles.headerButtonRight}
             onPress={toggleFlash}
           >
-            {" "}
-            {/* New style for right button */}
             <Ionicons
               name={flashEnabled ? "flash" : "flash-off"}
               size={24}
@@ -180,6 +209,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             />
           </TouchableOpacity>
         </View>
+
         {/* Scanning Frame */}
         <View style={styles.scanFrame}>
           <View style={styles.frameCorner} />
@@ -198,7 +228,30 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
               ]}
             />
           )}
+
+          {/* Success animation */}
+          {scanned && (
+            <Animated.View
+              style={[
+                styles.successOverlay,
+                {
+                  opacity: successAnimation,
+                  transform: [{ scale: successScale }],
+                },
+              ]}
+            >
+              <View style={styles.successIcon}>
+                <Ionicons
+                  name="checkmark-circle"
+                  size={80}
+                  color={COLORS.success}
+                />
+              </View>
+              <Text style={styles.successText}>Scanned Successfully!</Text>
+            </Animated.View>
+          )}
         </View>
+
         {/* Instructions */}
         <View style={styles.instructions}>
           <Text style={styles.instructionText}>
@@ -212,6 +265,15 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Tips */}
+        {!scanned && (
+          <View style={styles.tipsContainer}>
+            <Text style={styles.tipText}>
+              💡 Hold steady and ensure good lighting
+            </Text>
+          </View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -221,23 +283,20 @@ const { width, height } = Dimensions.get("window");
 const scanFrameSize = width * 0.7;
 
 const styles = StyleSheet.create({
-  // New safe area container style
   safeAreaContainer: {
     flex: 1,
-    backgroundColor: COLORS.gray900, // Background for the whole screen
+    backgroundColor: COLORS.gray900,
   },
-  // New container for camera and its absolute positioned children
   cameraContainer: {
     flex: 1,
-    backgroundColor: "black", // Ensure camera background is black
+    backgroundColor: "black",
   },
   container: {
-    // Old container style, might be removed or reused for permission screens
     flex: 1,
     backgroundColor: COLORS.gray900,
   },
   camera: {
-    ...StyleSheet.absoluteFillObject, // Make camera fill its parent
+    ...StyleSheet.absoluteFillObject,
   },
   message: {
     textAlign: "center",
@@ -278,7 +337,7 @@ const styles = StyleSheet.create({
   },
   header: {
     position: "absolute",
-    top: Platform.OS === "ios" ? SPACING.xl * 1.5 : SPACING.md, // Adjusted for safe area on iOS
+    top: Platform.OS === "ios" ? SPACING.xl * 1.5 : SPACING.md,
     left: 0,
     right: 0,
     flexDirection: "row",
@@ -288,7 +347,6 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   headerButtonLeft: {
-    // Specific style for left button
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -297,7 +355,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerButtonRight: {
-    // Specific style for right button
     width: 44,
     height: 44,
     borderRadius: 22,
@@ -312,10 +369,10 @@ const styles = StyleSheet.create({
   },
   scanFrame: {
     position: "absolute",
-    top: (height - scanFrameSize) / 2, // Centered vertically in the view
-    left: (width - scanFrameSize) / 2, // Centered horizontally
+    top: (height - scanFrameSize) / 2,
+    left: (width - scanFrameSize) / 2,
     width: scanFrameSize,
-    height: 200, // Keeping original height for scan line animation
+    height: 200,
     zIndex: 1,
   },
   frameCorner: {
@@ -365,9 +422,27 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.8,
     shadowRadius: 10,
   },
+  successOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+  },
+  successIcon: {
+    marginBottom: SPACING.md,
+  },
+  successText: {
+    color: COLORS.success,
+    fontSize: TYPOGRAPHY.sizes.lg,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+  },
   instructions: {
     position: "absolute",
-    bottom: 100, // Adjust this based on your bottom UI elements
+    bottom: 100,
     left: 0,
     right: 0,
     alignItems: "center",
@@ -389,5 +464,18 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.semibold,
+  },
+  tipsContainer: {
+    position: "absolute",
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    paddingHorizontal: SPACING.lg,
+  },
+  tipText: {
+    color: COLORS.gray300,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    textAlign: "center",
   },
 });
