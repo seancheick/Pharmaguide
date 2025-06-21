@@ -1,3 +1,5 @@
+// src/components/common/AnimatedTouchable.tsx
+
 import { TouchableOpacity, ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,

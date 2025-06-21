@@ -1,10 +1,10 @@
+// src/stores/stackStore.ts - Enhanced version using safeStorage
+
 import { create } from "zustand";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { safeStorage } from "../utils/safeStorage"; // Use safeStorage instead
 import { supabase } from "../services/supabase/client";
 import type { UserStack } from "../types";
-import type { PostgrestError } from "@supabase/supabase-js"; // Import PostgrestError
-
-// Add this to your stackStore.ts after the imports
+import type { PostgrestError } from "@supabase/supabase-js";
 
 // Helper function to safely get user ID with the new RPC function
 const createUserIfNeeded = async (
@@ -31,8 +31,8 @@ const createUserIfNeeded = async (
 };
 
 // Add a timeout wrapper for Supabase calls
-const withTimeout = async (promise, timeoutMs = 5000) => {
-  let timeoutId;
+const withTimeout = async (promise: Promise<any>, timeoutMs = 5000) => {
+  let timeoutId: NodeJS.Timeout;
   const timeoutPromise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
       reject(new Error("Operation timed out"));
@@ -66,7 +66,6 @@ interface StackStore {
   removeFromStack: (itemId: string) => Promise<void>;
   updateStack: (itemId: string, updates: Partial<UserStack>) => Promise<void>;
   syncWithServer: () => Promise<void>;
-  // Add a listener for auth changes to re-sync/reload
   _handleAuthChange: (event: string, session: any) => Promise<void>;
 }
 
@@ -77,12 +76,10 @@ export const useStackStore = create<StackStore>((set, get) => ({
   initialized: false,
   loading: false,
 
-  // Helper to get user ID from Supabase Auth and database
-  // Update the _getUserId method in your store to use the new function:
   _getUserId: async (): Promise<string | null> => {
     try {
-      // First try to get from AsyncStorage for faster response
-      const storedUserId = await AsyncStorage.getItem("current_user_id");
+      // First try to get from safeStorage for faster response
+      const storedUserId = await safeStorage.getItem("current_user_id");
       if (storedUserId) {
         return storedUserId;
       }
@@ -90,10 +87,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
       // If not in storage, try to get from auth session with timeout
       const {
         data: { session },
-      } = await withTimeout(
-        supabase.auth.getSession(),
-        3000 // 3 second timeout
-      );
+      } = await withTimeout(supabase.auth.getSession(), 3000);
 
       if (!session?.user) {
         return null;
@@ -107,18 +101,27 @@ export const useStackStore = create<StackStore>((set, get) => ({
             .select("id")
             .eq("auth_id", session.user.id)
             .single(),
-          3000 // 3 second timeout
+          3000
         );
 
         if (error || !data) {
           console.warn("User not found in database, attempting to create");
-          return await createUserIfNeeded(session.user.id, session.user.email);
+          const userId = await createUserIfNeeded(
+            session.user.id,
+            session.user.email
+          );
+          if (userId) {
+            // Store for future use
+            await safeStorage.setItem("current_user_id", userId);
+          }
+          return userId;
         }
 
+        // Store for future use
+        await safeStorage.setItem("current_user_id", data.id);
         return data.id;
       } catch (dbError) {
         console.error("Database error getting user ID:", dbError);
-        // Fall back to local storage or memory cache
         return null;
       }
     } catch (error) {
@@ -131,7 +134,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
     set({ loading: true });
     try {
       // First try to load from local storage for immediate display
-      const storedStack = await AsyncStorage.getItem(STACK_STORAGE_KEY);
+      const storedStack = await safeStorage.getItem(STACK_STORAGE_KEY);
       const localStack: UserStack[] = storedStack
         ? JSON.parse(storedStack)
         : [];
@@ -155,7 +158,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
               .eq("user_id", userId)
               .eq("active", true)
               .order("updated_at", { ascending: false }),
-            5000 // 5 second timeout
+            5000
           );
 
           if (error) {
@@ -198,23 +201,19 @@ export const useStackStore = create<StackStore>((set, get) => ({
       set({ stack: mergedStack, initialized: true });
 
       // Save the merged stack back to local storage
-      await AsyncStorage.setItem(
-        STACK_STORAGE_KEY,
-        JSON.stringify(mergedStack)
-      );
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(mergedStack));
 
       // Attempt to sync local-only data to server after load if connection was restored
       if (!serverError && userId) {
-        // Only sync if DB load was successful and user exists
         await get().syncWithServer();
       }
     } catch (error: any) {
       console.error("Error loading stack (outer catch):", error);
-      set({ initialized: true }); // Ensure initialized is true even on error
+      set({ initialized: true });
 
       // Always attempt to load from local storage as a last resort
       try {
-        const stored = await AsyncStorage.getItem(STACK_STORAGE_KEY);
+        const stored = await safeStorage.getItem(STACK_STORAGE_KEY);
         if (stored) {
           const localStack: UserStack[] = JSON.parse(stored);
           set({ stack: localStack });
@@ -228,13 +227,13 @@ export const useStackStore = create<StackStore>((set, get) => ({
   },
 
   addToStack: async (item) => {
-    set({ loading: true }); // Set loading for individual action
+    set({ loading: true });
     const timestamp = new Date().toISOString();
-    const tempId = `temp_${Date.now()}`; // Temporary ID for optimistic update
+    const tempId = `temp_${Date.now()}`;
     const newItem: UserStack = {
-      id: tempId, // Use temporary ID
-      user_id: "pending_sync", // Mark as needing sync
-      item_id: item.item_id || tempId, // Use item_id or tempId
+      id: tempId,
+      user_id: "pending_sync",
+      item_id: item.item_id || tempId,
       name: item.name || "Unknown Product",
       type: item.type || "supplement",
       dosage: item.dosage || "As directed",
@@ -253,21 +252,19 @@ export const useStackStore = create<StackStore>((set, get) => ({
     try {
       const userId = await get()._getUserId();
       if (!userId) {
-        // If no user, keep as local-only and log
         throw {
           message: "Not authenticated. Item added locally only.",
           code: "auth/not-authenticated",
         } as StackStoreError;
       }
 
-      // Prepare item data for database insert
       const itemDataForDb = {
         user_id: userId,
         name: newItem.name,
         type: newItem.type,
         dosage: newItem.dosage,
         frequency: newItem.frequency,
-        item_id: newItem.item_id, // Use actual product ID from scan
+        item_id: newItem.item_id,
         brand: newItem.brand,
         imageUrl: newItem.imageUrl,
         ingredients: newItem.ingredients,
@@ -298,25 +295,18 @@ export const useStackStore = create<StackStore>((set, get) => ({
       }));
 
       // Update local storage
-      await AsyncStorage.setItem(
-        STACK_STORAGE_KEY,
-        JSON.stringify(get().stack)
-      );
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
     } catch (error: any) {
       console.error("Error adding to stack (DB sync failed):", error);
-      // Revert optimistic update or mark as local-only if DB failed
+      // Mark as local-only if DB failed
       set((state) => ({
-        stack: state.stack.map(
-          (sItem) =>
-            sItem.id === tempId
-              ? { ...sItem, user_id: "local", id: `local_${Date.now()}` }
-              : sItem // Assign new local ID
+        stack: state.stack.map((sItem) =>
+          sItem.id === tempId
+            ? { ...sItem, user_id: "local", id: `local_${Date.now()}` }
+            : sItem
         ),
       }));
-      await AsyncStorage.setItem(
-        STACK_STORAGE_KEY,
-        JSON.stringify(get().stack)
-      );
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
       throw {
         message: error.message || "Failed to add item. Added locally only.",
         code: error.code || "stack/add-failed",
@@ -335,7 +325,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
     set((state) => ({
       stack: state.stack.filter((item) => item.id !== itemId),
     }));
-    await AsyncStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
+    await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
 
     try {
       const { error } = await supabase
@@ -354,7 +344,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
       console.error("Error removing from stack (DB sync failed):", error);
       // Revert optimistic update on failure
       set({ stack: prevStack });
-      await AsyncStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
       throw {
         message: error.message || "Failed to remove item. Please try again.",
         code: error.code || "stack/remove-failed",
@@ -377,7 +367,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
         item.id === itemId ? { ...item, ...updateData } : item
       ),
     }));
-    await AsyncStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
+    await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
 
     try {
       const { error } = await supabase
@@ -396,7 +386,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
       console.error("Error updating stack item (DB sync failed):", error);
       // Revert optimistic update on failure
       set({ stack: prevStack });
-      await AsyncStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
       throw {
         message: error.message || "Failed to update item. Please try again.",
         code: error.code || "stack/update-failed",
@@ -422,14 +412,13 @@ export const useStackStore = create<StackStore>((set, get) => ({
 
       // Push local-only items to server
       for (const item of localOnlyItems) {
-        // Exclude the 'id' field as it's generated by DB
         const { id, user_id, ...itemData } = item;
         const { data: insertedData, error } = await supabase
           .from("user_stack")
           .insert({
             ...itemData,
-            user_id: userId, // Ensure correct user_id is set for server
-            created_at: item.created_at, // Preserve original creation time if available
+            user_id: userId,
+            created_at: item.created_at,
             updated_at: new Date().toISOString(),
           })
           .select()
@@ -440,11 +429,9 @@ export const useStackStore = create<StackStore>((set, get) => ({
             `Error syncing local item ${item.name} to server:`,
             error
           );
-          // Decide whether to remove item from local stack or retry later
-          // For now, let it be reloaded on next loadStack
           continue;
         } else if (insertedData) {
-          // Replace the local item with the server-generated one (new ID, confirmed user_id)
+          // Replace the local item with the server-generated one
           set((state) => ({
             stack: state.stack.map((sItem) =>
               sItem.id === item.id ? (insertedData as UserStack) : sItem
@@ -453,20 +440,14 @@ export const useStackStore = create<StackStore>((set, get) => ({
         }
       }
 
-      // After pushing local-only items, a full reload is the simplest way to ensure consistency
-      // It handles updates and deletions implicitly by re-merging
+      // After pushing local-only items, reload for consistency
       await get().loadStack();
     } catch (error: any) {
       console.error("Error syncing with server:", error);
-      // Do not throw here, as sync is a background operation and shouldn't crash UI
     }
   },
 
-  // Listen for Supabase Auth changes to trigger stack reload/sync
   _handleAuthChange: async (event, session) => {
-    // Only reload/sync on relevant auth events (e.g., SIGNED_IN, SIGNED_OUT, INITIAL_SESSION)
-    // SIGNED_OUT will effectively trigger a load for anonymous user, or clear if no anon support
-    // SIGNED_IN will allow loading of their personal stack
     if (
       event === "SIGNED_IN" ||
       event === "SIGNED_OUT" ||
@@ -478,7 +459,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
   },
 }));
 
-// Subscribe to auth changes outside the store definition to avoid re-subscription issues
+// Subscribe to auth changes
 supabase.auth.onAuthStateChange((event, session) => {
   useStackStore.getState()._handleAuthChange(event, session);
 });

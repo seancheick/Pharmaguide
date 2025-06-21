@@ -434,7 +434,7 @@ export const HomeScreen = React.memo(() => {
                 activeOpacity={0.8}
               >
                 <Text style={styles.modalPrimaryButtonText}>
-                  Create Account
+                  Sign in or Create Account
                 </Text>
               </TouchableOpacity>
 

@@ -1,4 +1,3 @@
-// Fixed Welcome Screen Design - Simplified Version
 // src/screens/auth/WelcomeScreen.tsx
 
 import React, { useState, useEffect } from "react";

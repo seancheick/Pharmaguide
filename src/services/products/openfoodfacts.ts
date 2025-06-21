@@ -1,3 +1,5 @@
+// src/services/products/openfoodfacts.ts
+
 import { API_ENDPOINTS } from "../../constants";
 
 export interface OpenFoodFactsProduct {

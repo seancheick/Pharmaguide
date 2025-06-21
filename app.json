@@ -4,17 +4,23 @@
     "slug": "pharmaguide",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pharmaguide.app",
-      "infoPlist": {
-        "NSCameraUsageDescription": "PharmaGuide needs camera access to scan product barcodes and ingredient lists for supplement analysis.",
-        "NSMicrophoneUsageDescription": "PharmaGuide uses microphone for voice-activated scanning and AI interactions."
-      }
+      "bundleIdentifier": "com.pharmaguide.app"
     },
     "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
       "package": "com.pharmaguide.app",
       "permissions": [
         "android.permission.CAMERA",
@@ -22,21 +28,19 @@
       ]
     },
     "web": {
-      "bundler": "metro"
+      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       [
-        "expo-barcode-scanner",
-        {
-          "cameraPermission": "Allow PharmaGuide to scan product barcodes for supplement analysis."
-        }
-      ],
-      [
         "expo-camera",
         {
-          "cameraPermission": "PharmaGuide needs camera access to scan product barcodes for supplement analysis."
+          "cameraPermission": "Allow PharmaGuide to access your camera for barcode scanning."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "supabaseUrl": "https://myxpwegapxhcodcipyxu.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15eHB3ZWdhcHhoY29kY2lweXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0ODIyMjEsImV4cCI6MjA2NTA1ODIyMX0.Ik5kKxOfcVF9W155uc3V1LyxAGXYj_AZjiu5IhaGXIo"
+    }
   }
 }

@@ -1,3 +1,5 @@
+// src/constants/index.ts
+
 export const COLORS = {
   primary: "#2563EB",
   primaryDark: "#1D4ED8",

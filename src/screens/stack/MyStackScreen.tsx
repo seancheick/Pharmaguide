@@ -1,3 +1,5 @@
+// src/screens/stack/MyStackScreen.tsx
+
 import React, { useEffect, useState, useCallback, useMemo } from "react"; // Added useMemo
 import {
   View,
@@ -70,15 +72,16 @@ export function MyStackScreen() {
   const mapUserStackToProduct = useCallback(
     (userStackItem: UserStack): Product => {
       // Map simple ingredients to full Ingredient objects
-      const mappedIngredients = userStackItem.ingredients?.map(ingredient => ({
-        name: ingredient.name,
-        amount: ingredient.amount || 0,
-        unit: ingredient.unit || "mg",
-        form: "other" as const,
-        bioavailability: "medium" as const,
-        evidenceLevel: "theoretical" as const,
-        category: "active" as const,
-      })) || [];
+      const mappedIngredients =
+        userStackItem.ingredients?.map((ingredient) => ({
+          name: ingredient.name,
+          amount: ingredient.amount || 0,
+          unit: ingredient.unit || "mg",
+          form: "other" as const,
+          bioavailability: "medium" as const,
+          evidenceLevel: "theoretical" as const,
+          category: "active" as const,
+        })) || [];
 
       return {
         id: userStackItem.item_id, // Use item_id as product ID
@@ -167,13 +170,16 @@ export function MyStackScreen() {
         });
 
         // Escalating overall risk level - implement risk escalation inline
-        const escalateRisk = (current: RiskLevel, newRisk: RiskLevel): RiskLevel => {
+        const escalateRisk = (
+          current: RiskLevel,
+          newRisk: RiskLevel
+        ): RiskLevel => {
           const riskOrder = ["NONE", "LOW", "MODERATE", "HIGH", "CRITICAL"];
           const currentIndex = riskOrder.indexOf(current);
           const newIndex = riskOrder.indexOf(newRisk);
           return newIndex > currentIndex ? newRisk : current;
         };
-        
+
         overallHighestRisk = escalateRisk(
           overallHighestRisk,
           result.overallRiskLevel
@@ -308,7 +314,8 @@ export function MyStackScreen() {
           {/* Stack Safety Overview */}
           {stackAnalysis &&
             (stackAnalysis.overallRiskLevel !== "NONE" ||
-              (stackAnalysis.nutrientWarnings && stackAnalysis.nutrientWarnings.length > 0)) && (
+              (stackAnalysis.nutrientWarnings &&
+                stackAnalysis.nutrientWarnings.length > 0)) && (
               <View
                 style={[
                   styles.safetyAlert,

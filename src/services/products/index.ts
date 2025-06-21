@@ -8,6 +8,8 @@ import type {
   Ingredient,
   UserStack,
 } from "../../types";
+export { openFoodFactsService } from "./openfoodfacts";
+export { interactionService } from "../interactions";
 
 export class ProductService {
   // Add a cache for product analysis results

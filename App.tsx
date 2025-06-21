@@ -1,6 +1,7 @@
 // App.tsx
 import React, { useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
+import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { AuthProvider, useAuth } from "./src/hooks/useAuth";
 import { AppNavigator } from "./src/navigation/AppNavigator";
 import { performanceMonitor } from "./src/services/performance/performanceMonitor";
@@ -43,21 +44,13 @@ export default function App() {
             intermediates: true,
           });
           console.log(`Created directory: ${anonymousDir}`);
-        } else {
-          console.log(`Directory already exists: ${anonymousDir}`);
         }
       } catch (error) {
-        console.error("Error ensuring directory exists:", error);
+        console.error(`Failed to create directory: ${error}`);
       }
     };
 
-    // Run directory creation
     ensureDirectoryExists();
-
-    // End measuring when app is ready
-    setTimeout(() => {
-      performanceMonitor.endMeasure("cold_start");
-    }, 100);
   }, []);
 
   return (
