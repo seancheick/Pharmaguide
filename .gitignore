@@ -42,3 +42,6 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+# TestHuggingFace
+testHuggingFace.js
