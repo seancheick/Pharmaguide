@@ -3,16 +3,25 @@
 # dependencies
 node_modules/
 
-# Expo
+# Expo/React Native
 .expo/
+.expo-shared/
 dist/
+build/
 web-build/
 expo-env.d.ts
+
+# Build output (native, if ejected)
+android/
+ios/
 
 # Environment variables
 .env
 .env.*
+.env.local
+.env*.local
 !.env.example
+.env.keys
 
 # Native
 .kotlin/
@@ -30,18 +39,32 @@ expo-env.d.ts
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+pnpm-debug.log*
 
 # macOS
 .DS_Store
 *.pem
-
-# local env files
-.env
-.env*.local
-.env.local
 
 # typescript
 *.tsbuildinfo
 
 # TestHuggingFace
 testHuggingFace.js
+
+# IDE files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Test/coverage output
+coverage/
+
+# Misc
+*.log
+*.lock
+*.tmp
+*.swp
+
+# VSCode settings (optional, already above)
+# .vscode/

@@ -1,5 +1,5 @@
 // src/screens/scan/BarcodeScanner.tsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -11,16 +11,17 @@ import {
   Animated,
   Vibration,
   Platform,
-} from "react-native";
+} from 'react-native';
 import {
   CameraView,
   Camera,
   useCameraPermissions,
   BarcodeScanningResult,
   BarcodeType,
-} from "expo-camera";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
+} from 'expo-camera';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { ManualBarcodeEntry } from '../../components/barcode';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 interface BarcodeScannerProps {
   onBarcodeScanned: (barcode: string) => void;
@@ -29,15 +30,15 @@ interface BarcodeScannerProps {
 
 // Optimized barcode types for consumer products
 const CONSUMER_BARCODE_TYPES: BarcodeType[] = [
-  "ean13",
-  "ean8",
-  "upc_a",
-  "upc_e",
+  'ean13',
+  'ean8',
+  'upc_a',
+  'upc_e',
 ];
 const EXTENDED_BARCODE_TYPES: BarcodeType[] = [
   ...CONSUMER_BARCODE_TYPES,
-  "code128",
-  "code39",
+  'code128',
+  'code39',
 ];
 
 export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
@@ -48,6 +49,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const [scanned, setScanned] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [scanning, setScanning] = useState(true);
+  const [showManualEntry, setShowManualEntry] = useState(false);
   const scanLineAnimation = useRef(new Animated.Value(0)).current;
   const successAnimation = useRef(new Animated.Value(0)).current;
   const successScale = useRef(new Animated.Value(0)).current;
@@ -89,7 +91,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const handleBarCodeScanned = ({ data }: BarcodeScanningResult) => {
     if (scanned) return;
 
-    console.log("📱 Barcode scanned:", data);
+    console.log('📱 Barcode scanned:', data);
 
     // Haptic feedback
     Vibration.vibrate(100);
@@ -104,9 +106,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         onBarcodeScanned(data);
       });
     } else {
-      Alert.alert("Invalid Barcode", "Please scan a valid product barcode.", [
+      Alert.alert('Invalid Barcode', 'Please scan a valid product barcode.', [
         {
-          text: "Try Again",
+          text: 'Try Again',
           onPress: () => {
             setScanned(false);
             setScanning(true);
@@ -141,8 +143,14 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const resetScanner = () => {
     setScanned(false);
     setScanning(true);
+    setShowManualEntry(false);
     successAnimation.setValue(0);
     successScale.setValue(0);
+  };
+
+  const handleManualBarcodeEntry = (barcode: string) => {
+    setShowManualEntry(false);
+    onBarcodeScanned(barcode);
   };
 
   if (!permission) {
@@ -179,13 +187,25 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
     outputRange: [0, 200],
   });
 
+  // Show manual entry overlay if requested
+  if (showManualEntry) {
+    return (
+      <ManualBarcodeEntry
+        onBarcodeEntered={handleManualBarcodeEntry}
+        onClose={() => setShowManualEntry(false)}
+        title="Enter Barcode Manually"
+        placeholder="Enter product barcode"
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.cameraContainer}>
         <CameraView
           style={styles.camera}
           facing="back"
-          flash={flashEnabled ? "on" : "off"}
+          flash={flashEnabled ? 'on' : 'off'}
           barcodeScannerSettings={{
             barcodeTypes: CONSUMER_BARCODE_TYPES,
           }}
@@ -203,7 +223,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
             onPress={toggleFlash}
           >
             <Ionicons
-              name={flashEnabled ? "flash" : "flash-off"}
+              name={flashEnabled ? 'flash' : 'flash-off'}
               size={24}
               color={COLORS.background}
             />
@@ -256,8 +276,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
         <View style={styles.instructions}>
           <Text style={styles.instructionText}>
             {scanned
-              ? "Processing barcode..."
-              : "Position the barcode within the frame"}
+              ? 'Processing barcode...'
+              : 'Position the barcode within the frame'}
           </Text>
           {scanned && (
             <TouchableOpacity style={styles.retryButton} onPress={resetScanner}>
@@ -266,12 +286,24 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           )}
         </View>
 
-        {/* Tips */}
+        {/* Tips and Manual Entry */}
         {!scanned && (
           <View style={styles.tipsContainer}>
             <Text style={styles.tipText}>
               💡 Hold steady and ensure good lighting
             </Text>
+
+            <TouchableOpacity
+              style={styles.manualEntryButton}
+              onPress={() => setShowManualEntry(true)}
+            >
+              <Ionicons
+                name="keypad-outline"
+                size={18}
+                color={COLORS.primary}
+              />
+              <Text style={styles.manualEntryText}>Enter Manually</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -279,7 +311,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   );
 };
 
-const { width, height } = Dimensions.get("window");
+const { width, height } = Dimensions.get('window');
 const scanFrameSize = width * 0.7;
 
 const styles = StyleSheet.create({
@@ -289,7 +321,7 @@ const styles = StyleSheet.create({
   },
   cameraContainer: {
     flex: 1,
-    backgroundColor: "black",
+    backgroundColor: 'black',
   },
   container: {
     flex: 1,
@@ -299,14 +331,14 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   message: {
-    textAlign: "center",
+    textAlign: 'center',
     paddingBottom: 10,
     color: COLORS.background,
   },
   permissionContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
   permissionTitle: {
@@ -315,12 +347,12 @@ const styles = StyleSheet.create({
     color: COLORS.background,
     marginTop: SPACING.lg,
     marginBottom: SPACING.sm,
-    textAlign: "center",
+    textAlign: 'center',
   },
   permissionMessage: {
     fontSize: TYPOGRAPHY.sizes.base,
     color: COLORS.gray300,
-    textAlign: "center",
+    textAlign: 'center',
     lineHeight: 22,
     marginBottom: SPACING.xl,
   },
@@ -336,13 +368,13 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semibold,
   },
   header: {
-    position: "absolute",
-    top: Platform.OS === "ios" ? SPACING.xl * 1.5 : SPACING.md,
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? SPACING.xl * 1.5 : SPACING.md,
     left: 0,
     right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     zIndex: 1,
   },
@@ -350,17 +382,17 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerButtonRight: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   headerTitle: {
     color: COLORS.background,
@@ -368,7 +400,7 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semibold,
   },
   scanFrame: {
-    position: "absolute",
+    position: 'absolute',
     top: (height - scanFrameSize) / 2,
     left: (width - scanFrameSize) / 2,
     width: scanFrameSize,
@@ -376,7 +408,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   frameCorner: {
-    position: "absolute",
+    position: 'absolute',
     width: 30,
     height: 30,
     borderColor: COLORS.primary,
@@ -391,28 +423,28 @@ const styles = StyleSheet.create({
   topRight: {
     top: 0,
     right: 0,
-    left: "auto",
+    left: 'auto',
     borderLeftWidth: 0,
     borderRightWidth: 3,
   },
   bottomLeft: {
     bottom: 0,
-    top: "auto",
+    top: 'auto',
     borderTopWidth: 0,
     borderBottomWidth: 3,
   },
   bottomRight: {
     bottom: 0,
     right: 0,
-    top: "auto",
-    left: "auto",
+    top: 'auto',
+    left: 'auto',
     borderTopWidth: 0,
     borderLeftWidth: 0,
     borderRightWidth: 3,
     borderBottomWidth: 3,
   },
   scanLine: {
-    position: "absolute",
+    position: 'absolute',
     left: 0,
     right: 0,
     height: 2,
@@ -423,14 +455,14 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
   },
   successOverlay: {
-    position: "absolute",
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
   },
   successIcon: {
     marginBottom: SPACING.md,
@@ -441,17 +473,17 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semibold,
   },
   instructions: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 100,
     left: 0,
     right: 0,
-    alignItems: "center",
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
   },
   instructionText: {
     color: COLORS.background,
     fontSize: TYPOGRAPHY.sizes.base,
-    textAlign: "center",
+    textAlign: 'center',
     marginBottom: SPACING.md,
   },
   retryButton: {
@@ -466,16 +498,33 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.semibold,
   },
   tipsContainer: {
-    position: "absolute",
+    position: 'absolute',
     bottom: 40,
     left: 0,
     right: 0,
-    alignItems: "center",
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
   },
   tipText: {
     color: COLORS.gray300,
     fontSize: TYPOGRAPHY.sizes.sm,
-    textAlign: "center",
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+  },
+  manualEntryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+  },
+  manualEntryText: {
+    color: COLORS.primary,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    fontWeight: TYPOGRAPHY.weights.medium,
+    marginLeft: SPACING.xs,
   },
 });

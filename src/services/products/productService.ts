@@ -1,13 +1,14 @@
 // src/services/products/productService.ts
 
-import { Product, ProductAnalysis, StackItem } from "@/types";
-import { openFoodFactsService } from "./openfoodfacts";
+import { Product, ProductAnalysis, StackItem } from '@/types';
+import { openFoodFactsService } from './openfoodfacts';
 import {
   productService as dbProductService,
   scanService,
   interactionService,
-} from "@/services/database";
-import { interactionChecker } from "../interactions/interactionService";
+} from '@/services/database';
+import { interactionChecker } from '../interactions/interactionService';
+import { convertSearchResultToProduct } from '../search/productConverter';
 
 class ProductService {
   /**
@@ -22,7 +23,7 @@ class ProductService {
       const product = await openFoodFactsService.getProduct(barcode);
 
       if (!product) {
-        throw new Error("Product not found");
+        throw new Error('Product not found');
       }
 
       // Analyze with user's stack
@@ -30,7 +31,7 @@ class ProductService {
 
       return { product, analysis };
     } catch (error) {
-      console.error("Error analyzing scanned product:", error);
+      console.error('Error analyzing scanned product:', error);
       throw error;
     }
   }
@@ -67,10 +68,10 @@ class ProductService {
   }
 
   private calculateSafetyScore(interactions: any): number {
-    if (interactions.overallRiskLevel === "CRITICAL") return 20;
-    if (interactions.overallRiskLevel === "HIGH") return 40;
-    if (interactions.overallRiskLevel === "MODERATE") return 60;
-    if (interactions.overallRiskLevel === "LOW") return 80;
+    if (interactions.overallRiskLevel === 'CRITICAL') return 20;
+    if (interactions.overallRiskLevel === 'HIGH') return 40;
+    if (interactions.overallRiskLevel === 'MODERATE') return 60;
+    if (interactions.overallRiskLevel === 'LOW') return 80;
     return 100;
   }
 
@@ -102,25 +103,46 @@ class ProductService {
     const recommendations: string[] = [];
 
     if (
-      interactions.overallRiskLevel === "HIGH" ||
-      interactions.overallRiskLevel === "CRITICAL"
+      interactions.overallRiskLevel === 'HIGH' ||
+      interactions.overallRiskLevel === 'CRITICAL'
     ) {
       recommendations.push(
-        "Consider consulting with a healthcare provider before use"
+        'Consider consulting with a healthcare provider before use'
       );
     }
 
     if (interactions.nutrientWarnings.length > 0) {
-      recommendations.push("Monitor total nutrient intake from all sources");
+      recommendations.push('Monitor total nutrient intake from all sources');
     }
 
     if (!product.thirdPartyTested) {
       recommendations.push(
-        "Look for third-party tested alternatives for quality assurance"
+        'Look for third-party tested alternatives for quality assurance'
       );
     }
 
     return recommendations;
+  }
+
+  /**
+   * Analyze a search result product with the user's stack
+   */
+  async analyzeSearchResult(
+    searchResult: any,
+    userStack: StackItem[]
+  ): Promise<{ product: Product; analysis: ProductAnalysis }> {
+    try {
+      // Convert search result to Product format
+      const product = convertSearchResultToProduct(searchResult);
+
+      // Analyze with user's stack using the same pipeline as scanned products
+      const analysis = await this.analyzeProduct(product, userStack);
+
+      return { product, analysis };
+    } catch (error) {
+      console.error('Error analyzing search result:', error);
+      throw error;
+    }
   }
 
   /**

@@ -2,25 +2,37 @@
 
 export const STORAGE_KEYS = {
   // User related
-  USER_DATA: "pharmaguide_user_data",
-  USER_PROFILE: "pharmaguide_user_profile",
-  LOCAL_USER: "pharmaguide_local_user",
-  CURRENT_USER_ID: "pharmaguide_current_user_id",
+  USER_TOKEN: '@pharmaguide_user_token',
+  USER_PROFILE: '@pharmaguide_user_profile',
+  USER_DATA: '@pharmaguide_user_data',
+  LOCAL_USER: '@pharmaguide_local_user',
+  CURRENT_USER_ID: '@pharmaguide_current_user_id',
 
   // App data
-  USER_STACK: "pharmaguide_user_stack",
-  RECENT_SCANS: "pharmaguide_recent_scans",
-  USER_STREAK: "pharmaguide_user_streak",
-  USER_POINTS: "pharmaguide_user_points",
-  USER_PROGRESS: "pharmaguide_user_progress",
+  USER_STACK: '@pharmaguide_user_stack',
+  RECENT_SCANS: '@pharmaguide_recent_scans',
+  SCAN_HISTORY: '@pharmaguide_scan_history',
+  USER_STREAK: '@pharmaguide_user_streak',
+  USER_POINTS: '@pharmaguide_user_points',
+  USER_PROGRESS: '@pharmaguide_user_progress',
+  PREFERENCES: '@pharmaguide_preferences',
+  GAMIFICATION_DATA: '@pharmaguide_gamification_data',
 
   // Chat
-  CHAT_SESSION: "pharmaguide_chat_session",
-  CHAT_HISTORY: "pharmaguide_chat_history",
+  CHAT_SESSION: '@pharmaguide_chat_session',
+  CHAT_HISTORY: '@pharmaguide_chat_history',
 
   // Cache
-  AI_CACHE_PREFIX: "pharmaguide_ai_cache_",
-  PRODUCT_CACHE_PREFIX: "pharmaguide_product_",
+  CACHE_PREFIX: '@pharmaguide_cache_',
+  AI_CACHE_PREFIX: '@pharmaguide_ai_cache_',
+  PRODUCT_CACHE_PREFIX: '@pharmaguide_product_',
+
+  // App state
+  APP_INITIALIZED: '@pharmaguide_app_initialized',
+  DAILY_CHALLENGE_STATUS: '@pharmaguide_daily_challenge_status',
+
+  // Search
+  RECENT_SEARCHES: '@pharmaguide_recent_searches',
 } as const;
 
 // Helper functions
@@ -29,7 +41,7 @@ export const getNamespacedKey = (
   suffix?: string
 ): string => {
   const baseKey = STORAGE_KEYS[key];
-  return suffix ? `${baseKey}_${suffix.replace(/[@#$%^&*()]/g, "_")}` : baseKey;
+  return suffix ? `${baseKey}_${suffix.replace(/[@#$%^&*()]/g, '_')}` : baseKey;
 };
 
 // Usage example:

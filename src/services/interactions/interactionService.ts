@@ -1,5 +1,8 @@
 // services/interaction/interactionService.ts
-import { CRITICAL_INTERACTIONS, NUTRIENT_LIMITS } from "../../constants";
+import { CRITICAL_INTERACTIONS, NUTRIENT_LIMITS } from '../../constants';
+import { analysisRateLimiter } from '../../utils/rateLimiting';
+import { sanitizeApiResponse } from '../../utils/sanitization';
+import { handleApiError } from '../../utils/errorHandling';
 import type {
   Product,
   UserStack,
@@ -7,7 +10,7 @@ import type {
   RiskLevel,
   StackInteractionResult,
   NutrientWarning, // Import NutrientWarning type
-} from "../../types";
+} from '../../types';
 
 export class InteractionService {
   // Canonicalize interactions to prevent duplicates (A+B = B+A)
@@ -20,11 +23,27 @@ export class InteractionService {
   async analyzeProductWithStack(
     product: Product,
     userStack: UserStack[],
-    healthProfile?: any // Keep this if you plan to use it for future checks
+    healthProfile?: any, // Keep this if you plan to use it for future checks
+    userId?: string
   ): Promise<StackInteractionResult> {
+    // Check rate limiting
+    const isAllowed = await analysisRateLimiter.isAllowed(
+      userId,
+      'interaction'
+    );
+    if (!isAllowed) {
+      const timeUntilReset = analysisRateLimiter.getTimeUntilReset(
+        userId,
+        'interaction'
+      );
+      throw new Error(
+        `Rate limit exceeded. Try again in ${Math.ceil(timeUntilReset / 1000)} seconds.`
+      );
+    }
+
     const interactions: InteractionDetail[] = [];
     const nutrientWarnings: NutrientWarning[] = []; // Use NutrientWarning type
-    let highestRisk: RiskLevel = "NONE";
+    let highestRisk: RiskLevel = 'NONE';
 
     // Check interactions with each item in stack
     for (const stackItem of userStack) {
@@ -47,7 +66,7 @@ export class InteractionService {
       overallRiskLevel: highestRisk, // Use overallRiskLevel as per the unified type
       interactions,
       nutrientWarnings,
-      overallSafe: highestRisk === "NONE" || highestRisk === "LOW",
+      overallSafe: highestRisk === 'NONE' || highestRisk === 'LOW',
     };
   }
 
@@ -64,18 +83,18 @@ export class InteractionService {
         for (const supplement of data.supplements || []) {
           if (productName.includes(supplement.toLowerCase())) {
             return {
-              type: "Drug-Supplement",
+              type: 'Drug-Supplement',
               severity: data.severity as RiskLevel,
               message: `${product.name} may interact with ${stackItem.name}`,
               mechanism: data.mechanism,
               evidenceSources: [
                 {
-                  badge: "🔵",
+                  badge: '🔵',
                   text: `FDA: ${data.evidence}`,
                 },
               ],
               recommendation:
-                "Consult your healthcare provider before combining these",
+                'Consult your healthcare provider before combining these',
             };
           }
         }
@@ -84,20 +103,83 @@ export class InteractionService {
         for (const supplement of data.supplements || []) {
           if (stackName.includes(supplement.toLowerCase())) {
             return {
-              type: "Drug-Supplement",
+              type: 'Drug-Supplement',
               severity: data.severity as RiskLevel,
               message: `${stackItem.name} may interact with ${product.name}`,
               mechanism: data.mechanism,
               evidenceSources: [
                 {
-                  badge: "🔵",
+                  badge: '🔵',
                   text: `FDA: ${data.evidence}`,
                 },
               ],
               recommendation:
-                "Consult your healthcare provider before combining these",
+                'Consult your healthcare provider before combining these',
             };
           }
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Check supplement-supplement interactions
+   */
+  private checkSupplementInteraction(
+    product: Product,
+    stackItem: UserStack
+  ): InteractionDetail | null {
+    const productIngredients =
+      product.ingredients?.map(i => i.name.toLowerCase()) || [];
+    const stackIngredients =
+      stackItem.ingredients?.map(i => i.name.toLowerCase()) || [];
+
+    // Define supplement interaction patterns
+    const supplementInteractions = {
+      iron: {
+        conflicting: ['calcium', 'zinc', 'magnesium', 'green_tea', 'coffee'],
+        severity: 'MODERATE' as RiskLevel,
+        mechanism: 'Competitive absorption leading to reduced bioavailability',
+        management: 'Separate administration by 2+ hours',
+      },
+      calcium: {
+        conflicting: ['iron', 'zinc', 'magnesium', 'phosphorus', 'fiber'],
+        severity: 'MODERATE' as RiskLevel,
+        mechanism:
+          'Competitive absorption and formation of insoluble complexes',
+        management: 'Take separately, limit single doses to 500mg',
+      },
+      zinc: {
+        conflicting: ['iron', 'calcium', 'copper', 'fiber'],
+        severity: 'MODERATE' as RiskLevel,
+        mechanism: 'Competitive absorption at intestinal level',
+        management: 'Take on empty stomach, separate from other minerals',
+      },
+    };
+
+    // Check for interactions
+    for (const productIngredient of productIngredients) {
+      for (const stackIngredient of stackIngredients) {
+        const interaction =
+          supplementInteractions[
+            productIngredient as keyof typeof supplementInteractions
+          ];
+        if (interaction?.conflicting?.includes(stackIngredient)) {
+          return {
+            type: 'Supplement-Supplement',
+            severity: interaction.severity,
+            message: `${product.name} and ${stackItem.name} may have reduced effectiveness when taken together`,
+            mechanism: interaction.mechanism,
+            evidenceSources: [
+              {
+                badge: '📚',
+                text: 'Clinical absorption studies',
+              },
+            ],
+            recommendation: interaction.management,
+          };
         }
       }
     }
@@ -111,7 +193,7 @@ export class InteractionService {
     userStack: UserStack[]
   ): Promise<{ warnings: NutrientWarning[]; riskLevel: RiskLevel }> {
     const warnings: NutrientWarning[] = []; // Use NutrientWarning type
-    let highestNutrientRisk: RiskLevel = "NONE"; // Track highest risk from nutrient warnings
+    let highestNutrientRisk: RiskLevel = 'NONE'; // Track highest risk from nutrient warnings
 
     const nutrients: {
       [key: string]: { total: number; unit: string; sources: string[] };
@@ -121,10 +203,11 @@ export class InteractionService {
       if (item.ingredients) {
         for (const ingredient of item.ingredients) {
           const nutrientName = ingredient.name.toLowerCase();
-          const nutrientLimit = NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
+          const nutrientLimit =
+            NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
           if (
             nutrientLimit &&
-            typeof ingredient.amount === "number" &&
+            typeof ingredient.amount === 'number' &&
             ingredient.amount > 0
           ) {
             if (!nutrients[nutrientName]) {
@@ -144,10 +227,11 @@ export class InteractionService {
     if (product.ingredients) {
       for (const ingredient of product.ingredients) {
         const nutrientName = ingredient.name.toLowerCase();
-        const nutrientLimit = NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
+        const nutrientLimit =
+          NUTRIENT_LIMITS[nutrientName as keyof typeof NUTRIENT_LIMITS];
         if (
           nutrientLimit &&
-          typeof ingredient.amount === "number" &&
+          typeof ingredient.amount === 'number' &&
           ingredient.amount > 0
         ) {
           if (!nutrients[nutrientName]) {
@@ -164,11 +248,11 @@ export class InteractionService {
           const limit = nutrientLimit;
 
           if (currentTotal > limit.ul) {
-            let currentWarningSeverity: RiskLevel = "LOW";
+            let currentWarningSeverity: RiskLevel = 'LOW';
             const percentExceeded = (currentTotal / limit.ul) * 100;
-            if (percentExceeded > 200) currentWarningSeverity = "CRITICAL";
-            else if (percentExceeded > 150) currentWarningSeverity = "HIGH";
-            else if (percentExceeded > 110) currentWarningSeverity = "MODERATE";
+            if (percentExceeded > 200) currentWarningSeverity = 'CRITICAL';
+            else if (percentExceeded > 150) currentWarningSeverity = 'HIGH';
+            else if (percentExceeded > 110) currentWarningSeverity = 'MODERATE';
 
             warnings.push({
               nutrient: nutrientName,
@@ -196,10 +280,55 @@ export class InteractionService {
   }
 
   private escalateRisk(current: RiskLevel, newRiskLevel: RiskLevel): RiskLevel {
-    const riskOrder = ["NONE", "LOW", "MODERATE", "HIGH", "CRITICAL"];
+    const riskOrder = ['NONE', 'LOW', 'MODERATE', 'HIGH', 'CRITICAL'];
     const currentIndex = riskOrder.indexOf(current);
     const newIndex = riskOrder.indexOf(newRiskLevel);
     return newIndex > currentIndex ? newRiskLevel : current;
+  }
+
+  /**
+   * Check interaction between two products with rate limiting
+   */
+  async checkInteraction(
+    product1: Product,
+    product2: Product,
+    userId?: string
+  ): Promise<StackInteractionResult> {
+    // Check rate limiting
+    const isAllowed = await analysisRateLimiter.isAllowed(userId, 'pairwise');
+    if (!isAllowed) {
+      const timeUntilReset = analysisRateLimiter.getTimeUntilReset(
+        userId,
+        'pairwise'
+      );
+      throw new Error(
+        `Rate limit exceeded. Try again in ${Math.ceil(timeUntilReset / 1000)} seconds.`
+      );
+    }
+
+    // Convert product2 to UserStack format for compatibility
+    const stackItem: UserStack = {
+      id: product2.id,
+      user_id: userId || 'anonymous',
+      item_id: product2.id,
+      name: product2.name,
+      brand: product2.brand || '',
+      type: product2.category === 'Medications' ? 'medication' : 'supplement',
+      dosage: product2.servingSize || '',
+      frequency: 'As directed',
+      ingredients: product2.ingredients || [],
+      imageUrl: product2.imageUrl,
+      barcode: product2.barcode,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    return this.analyzeProductWithStack(
+      product1,
+      [stackItem],
+      undefined,
+      userId
+    );
   }
 }
 

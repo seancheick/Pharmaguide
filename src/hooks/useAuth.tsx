@@ -1,31 +1,31 @@
 // src/hooks/useAuth.tsx
 
-import React, { createContext, useState, useEffect, useContext } from "react";
-import { supabase } from "../services/supabase/client"; // Correct path
-import { Session, User as SupabaseUser } from "@supabase/supabase-js";
-import { safeStorage } from "../utils/safeStorage";
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import { supabase } from '../services/supabase/client'; // Correct path
+import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { safeStorage } from '../utils/safeStorage';
 import type {
   User,
   UserProfile,
   UserPreferences,
   UserPoints,
   UserStreaks,
-} from "../types";
+} from '../types';
 
 // If you have database types in a separate file:
 // import { TABLES, RPC_FUNCTIONS } from "../types/database";
 // Otherwise, define them here:
 const TABLES = {
-  USERS: "users",
-  USER_PROFILES: "user_profiles",
-  USER_PREFERENCES: "user_preferences",
-  USER_POINTS: "user_points",
-  USER_STREAKS: "user_streaks",
-  USER_ROLES: "user_roles",
+  USERS: 'users',
+  USER_PROFILES: 'user_profiles',
+  USER_PREFERENCES: 'user_preferences',
+  USER_POINTS: 'user_points',
+  USER_STREAKS: 'user_streaks',
+  USER_ROLES: 'user_roles',
 } as const;
 
 const RPC_FUNCTIONS = {
-  CREATE_USER_WITH_PROFILE: "create_user_with_profile",
+  CREATE_USER_WITH_PROFILE: 'create_user_with_profile',
 } as const;
 
 interface AuthError {
@@ -43,6 +43,8 @@ interface AuthContextType {
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
+  updatePassword: (newPassword: string) => Promise<void>;
   clearError: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -68,7 +70,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
 };
@@ -118,23 +120,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           },
       preferences: dbUser.preferences
         ? {
-            aiResponseStyle: dbUser.preferences.ai_response_style || "concise",
-            budgetRange: dbUser.preferences.budget_range || "mid",
-            primaryFocus: dbUser.preferences.primary_focus || "safety",
+            aiResponseStyle: dbUser.preferences.ai_response_style || 'concise',
+            budgetRange: dbUser.preferences.budget_range || 'mid',
+            primaryFocus: dbUser.preferences.primary_focus || 'safety',
             notifications: dbUser.preferences.notifications || {
               push_enabled: true,
               email_enabled: true,
-              reminder_frequency: "daily",
+              reminder_frequency: 'daily',
             },
           }
         : {
-            aiResponseStyle: "concise",
-            budgetRange: "mid",
-            primaryFocus: "safety",
+            aiResponseStyle: 'concise',
+            budgetRange: 'mid',
+            primaryFocus: 'safety',
             notifications: {
               push_enabled: true,
               email_enabled: true,
-              reminder_frequency: "daily",
+              reminder_frequency: 'daily',
             },
           },
       points: dbUser.points
@@ -163,16 +165,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
    */
   const getLevelTitle = (level: number): string => {
     const titles = [
-      "Health Novice",
-      "Wellness Explorer",
-      "Supplement Scholar",
-      "Nutrition Navigator",
-      "Health Guardian",
-      "Wellness Warrior",
-      "Supplement Sage",
-      "Health Master",
-      "Wellness Wizard",
-      "PharmaGuide Legend",
+      'Health Novice',
+      'Wellness Explorer',
+      'Supplement Scholar',
+      'Nutrition Navigator',
+      'Health Guardian',
+      'Wellness Warrior',
+      'Supplement Sage',
+      'Health Master',
+      'Wellness Wizard',
+      'PharmaGuide Legend',
     ];
     return titles[Math.min(level - 1, titles.length - 1)];
   };
@@ -194,11 +196,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         streaks:${TABLES.USER_STREAKS}(*)
       `
       )
-      .eq("auth_id", authId)
+      .eq('auth_id', authId)
       .single();
 
     if (error) {
-      console.error("Error fetching user:", error);
+      console.error('Error fetching user:', error);
       return null;
     }
 
@@ -212,6 +214,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     authUser: SupabaseUser
   ): Promise<User | null> => {
     try {
+      console.log('🔄 Creating/updating user for auth ID:', authUser.id);
+      console.log('📧 Email:', authUser.email);
+      console.log('✅ Email confirmed:', authUser.email_confirmed_at);
+
       // Call RPC to create user and related records
       const { data: userId, error: rpcError } = await supabase.rpc(
         RPC_FUNCTIONS.CREATE_USER_WITH_PROFILE,
@@ -223,19 +229,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       );
 
       if (rpcError) {
-        console.error("RPC error:", rpcError);
+        console.error('❌ RPC error:', rpcError);
+        // Handle duplicate email error from database
+        if (rpcError.code === '23505' && rpcError.message.includes('email')) {
+          throw new Error(
+            'An account with this email already exists. Please sign in instead.'
+          );
+        }
         throw rpcError;
       }
+
+      console.log('✅ RPC success, user ID:', userId);
 
       // Fetch the complete user record
       const dbUser = await fetchUserWithRelations(authUser.id);
       if (!dbUser) {
-        throw new Error("Failed to fetch user after creation");
+        console.error('❌ Failed to fetch user after creation');
+        throw new Error('Failed to fetch user after creation');
       }
 
+      console.log('✅ User fetched successfully:', dbUser.id);
       return transformDatabaseUser(dbUser);
     } catch (error) {
-      console.error("Error creating/updating user:", error);
+      console.error('❌ Error creating/updating user:', error);
       return null;
     }
   };
@@ -257,11 +273,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           setUser(profile);
 
           if (profile) {
-            await safeStorage.setItem("current_user_id", profile.id);
+            await safeStorage.setItem('current_user_id', profile.id);
           }
         }
       } catch (error) {
-        console.error("Error initializing auth:", error);
+        console.error('Error initializing auth:', error);
       } finally {
         setLoading(false);
       }
@@ -273,7 +289,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth state changed:", event);
+      console.log('Auth state changed:', event);
 
       if (session?.user) {
         setSession(session);
@@ -281,12 +297,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(profile);
 
         if (profile) {
-          await safeStorage.setItem("current_user_id", profile.id);
+          await safeStorage.setItem('current_user_id', profile.id);
         }
       } else {
         setSession(null);
         setUser(null);
-        await safeStorage.removeItem("current_user_id");
+        await safeStorage.removeItem('current_user_id');
       }
     });
 
@@ -310,13 +326,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(profile);
 
         if (profile) {
-          await safeStorage.setItem("current_user_id", profile.id);
+          await safeStorage.setItem('current_user_id', profile.id);
         }
       }
     } catch (error: any) {
       setError({
-        message: error.message || "Failed to sign in anonymously",
-        code: error.code || "auth/anonymous-failed",
+        message: error.message || 'Failed to sign in anonymously',
+        code: error.code || 'auth/anonymous-failed',
         originalError: error,
       });
       throw error;
@@ -348,13 +364,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(profile);
 
         if (profile) {
-          await safeStorage.setItem("current_user_id", profile.id);
+          await safeStorage.setItem('current_user_id', profile.id);
         }
       }
     } catch (error: any) {
       setError({
-        message: error.message || "Failed to sign in",
-        code: error.code || "auth/sign-in-failed",
+        message: error.message || 'Failed to sign in',
+        code: error.code || 'auth/sign-in-failed',
         originalError: error,
       });
       throw error;
@@ -379,20 +395,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         password,
       });
 
-      if (error) throw error;
+      if (error) {
+        // Check if it's an email rate limit error
+        if (error.message.includes('rate') || error.message.includes('limit')) {
+          console.warn(
+            '📧 Email rate limit hit, but user may still be created'
+          );
+          // Continue to try creating user profile even if email fails
+        } else if (error.message.includes('User already registered')) {
+          // Handle user already exists error
+          throw new Error(
+            'An account with this email already exists. Please sign in instead.'
+          );
+        } else {
+          throw error;
+        }
+      }
 
       if (data.user) {
+        console.log('👤 User created in auth, creating profile...');
         const profile = await createOrUpdateUser(data.user);
         setUser(profile);
 
         if (profile) {
-          await safeStorage.setItem("current_user_id", profile.id);
+          await safeStorage.setItem('current_user_id', profile.id);
         }
       }
     } catch (error: any) {
+      console.error('❌ Sign up error:', error);
       setError({
-        message: error.message || "Failed to sign up",
-        code: error.code || "auth/sign-up-failed",
+        message: error.message || 'Failed to sign up',
+        code: error.code || 'auth/sign-up-failed',
         originalError: error,
       });
       throw error;
@@ -414,11 +447,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       setUser(null);
       setSession(null);
-      await safeStorage.removeItem("current_user_id");
+      await safeStorage.removeItem('current_user_id');
     } catch (error: any) {
       setError({
-        message: error.message || "Failed to sign out",
-        code: error.code || "auth/sign-out-failed",
+        message: error.message || 'Failed to sign out',
+        code: error.code || 'auth/sign-out-failed',
+        originalError: error,
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Reset password
+   */
+  const resetPassword = async (email: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
+
+      if (error) throw error;
+
+      console.log('✅ Password reset email sent successfully');
+    } catch (error: any) {
+      console.error('❌ Password reset error:', error);
+      setError({
+        message: error.message || 'Failed to send password reset email',
+        code: error.code || 'auth/reset-password-failed',
+        originalError: error,
+      });
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Update password (for authenticated users)
+   */
+  const updatePassword = async (newPassword: string): Promise<void> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword,
+      });
+
+      if (error) throw error;
+
+      console.log('✅ Password updated successfully');
+    } catch (error: any) {
+      console.error('❌ Password update error:', error);
+      setError({
+        message: error.message || 'Failed to update password',
+        code: error.code || 'auth/update-password-failed',
         originalError: error,
       });
       throw error;
@@ -440,7 +527,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         setUser(transformedUser);
       }
     } catch (error) {
-      console.error("Error refreshing user:", error);
+      console.error('Error refreshing user:', error);
     }
   };
 
@@ -460,6 +547,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         signInWithEmail,
         signUpWithEmail,
         signOut,
+        resetPassword,
+        updatePassword,
         clearError,
         refreshUser,
       }}

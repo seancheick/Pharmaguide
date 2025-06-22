@@ -1,5 +1,5 @@
 // src/screens/auth/LoginScreen.tsx
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,22 +8,22 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-} from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { useAuth } from "../../hooks/useAuth";
-import { Button, Input } from "../../components/common"; // Import new components
-import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { useAuth } from '../../hooks/useAuth';
+import { Button, Input } from '../../components/common'; // Import new components
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 export const LoginScreen = () => {
   const navigation = useNavigation();
   const { signInWithEmail } = useAuth();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
+      Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
@@ -33,8 +33,8 @@ export const LoginScreen = () => {
       // Navigation happens automatically via auth state change in AppNavigator
     } catch (error: any) {
       Alert.alert(
-        "Login Failed",
-        error.message || "An error occurred. Please try again."
+        'Login Failed',
+        error.message || 'An error occurred. Please try again.'
       );
     } finally {
       setLoading(false);
@@ -44,7 +44,7 @@ export const LoginScreen = () => {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
       <View style={styles.content}>
         <Text style={styles.title}>Welcome Back</Text>
@@ -80,11 +80,19 @@ export const LoginScreen = () => {
         />
 
         <TouchableOpacity
-          onPress={() => navigation.navigate("Signup" as never)}
+          onPress={() => navigation.navigate('ForgotPassword' as never)}
+          disabled={loading}
+          style={styles.forgotPasswordButton}
+        >
+          <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => navigation.navigate('Signup' as never)}
           disabled={loading}
           style={styles.linkButton}
         >
-          <Text style={styles.link}>Don't have an account? Sign up</Text>
+          <Text style={styles.link}>Don&apos;t have an account? Sign up</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -99,7 +107,7 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     padding: SPACING.xl,
-    justifyContent: "center",
+    justifyContent: 'center',
   },
   title: {
     fontSize: TYPOGRAPHY.sizes.xxxl,
@@ -118,13 +126,23 @@ const styles = StyleSheet.create({
   button: {
     marginTop: SPACING.lg,
   },
+  forgotPasswordButton: {
+    marginTop: SPACING.md,
+    alignSelf: 'center',
+  },
+  forgotPasswordText: {
+    color: COLORS.textSecondary,
+    fontSize: TYPOGRAPHY.sizes.sm,
+    textAlign: 'center',
+    fontWeight: TYPOGRAPHY.weights.medium,
+  },
   linkButton: {
     marginTop: SPACING.xl,
   },
   link: {
     color: COLORS.primary,
     fontSize: TYPOGRAPHY.sizes.base,
-    textAlign: "center",
+    textAlign: 'center',
     fontWeight: TYPOGRAPHY.weights.medium,
   },
 });

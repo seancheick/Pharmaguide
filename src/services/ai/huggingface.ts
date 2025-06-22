@@ -1,11 +1,14 @@
 // src/services/ai/huggingface.ts
-import { API_ENDPOINTS, AI_MODELS } from "../../constants";
+import { API_ENDPOINTS, AI_MODELS } from '../../constants';
+import { analysisRateLimiter, secureFetch } from '../../utils/rateLimiting';
+import { sanitizeApiResponse } from '../../utils/sanitization';
+import { handleApiError } from '../../utils/errorHandling';
 import type {
   Product,
   ProductAnalysis,
   AnalysisPoint,
   IngredientForm,
-} from "../../types";
+} from '../../types';
 
 interface HuggingFaceTextResponse {
   generated_text: string;
@@ -54,8 +57,9 @@ class HuggingFaceService {
   private useGroq: boolean = false; // Flag to enable/disable Groq
 
   constructor() {
-    this.apiKey = process.env.EXPO_PUBLIC_HUGGINGFACE_API_KEY || "";
-    this.groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || ""; // Load Groq key
+    // Use environment variables directly to avoid config issues
+    this.apiKey = process.env.EXPO_PUBLIC_HUGGINGFACE_API_KEY || '';
+    this.groqApiKey = process.env.EXPO_PUBLIC_GROQ_API_KEY || '';
     this.baseUrl = API_ENDPOINTS.HUGGINGFACE;
     this.groqBaseUrl = API_ENDPOINTS.GROQ;
 
@@ -64,19 +68,19 @@ class HuggingFaceService {
 
     if (!this.apiKey) {
       console.warn(
-        "⚠️ HuggingFace API key not set. HF-specific AI features (classification, embeddings) will be limited or unavailable."
+        '⚠️ HuggingFace API key not set. HF-specific AI features (classification, embeddings) will be limited or unavailable.'
       );
     }
 
     if (!this.groqApiKey) {
       console.warn(
-        "⚠️ Groq API key not set. Groq-powered chat/text generation will be unavailable."
+        '⚠️ Groq API key not set. Groq-powered chat/text generation will be unavailable.'
       );
     }
 
     if (this.useGroq) {
       console.log(
-        "✅ Groq API enabled for enhanced text generation (primary chat)"
+        '✅ Groq API enabled for enhanced text generation (primary chat)'
       );
     }
   }
@@ -92,7 +96,7 @@ class HuggingFaceService {
     const cacheKey = `chat_${this.simpleHash(prompt)}`;
     const cached = this.getCachedResponse(cacheKey); // Assuming getCachedResponse returns string or null
     if (cached) {
-      console.log("📦 Using cached chat response");
+      console.log('📦 Using cached chat response');
       return cached;
     }
 
@@ -106,7 +110,7 @@ class HuggingFaceService {
         }
       } catch (error) {
         console.warn(
-          "Groq API failed, falling back to rule-based response:",
+          'Groq API failed, falling back to rule-based response:',
           error
         );
       }
@@ -124,21 +128,33 @@ class HuggingFaceService {
    * @returns The content of the AI's response.
    * @throws Error if the API call fails or no content is received.
    */
-  private async callGroqAPI(prompt: string): Promise<string> {
+  private async callGroqAPI(prompt: string, userId?: string): Promise<string> {
     if (!this.groqApiKey) {
-      throw new Error("Groq API key not configured for this call.");
+      throw new Error('Groq API key not configured for this call.');
+    }
+
+    // Check rate limiting
+    const isAllowed = await analysisRateLimiter.isAllowed(userId, 'groq');
+    if (!isAllowed) {
+      const timeUntilReset = analysisRateLimiter.getTimeUntilReset(
+        userId,
+        'groq'
+      );
+      throw new Error(
+        `Rate limit exceeded. Try again in ${Math.ceil(timeUntilReset / 1000)} seconds.`
+      );
     }
 
     const payload = {
       model: AI_MODELS.GROQ.FAST, // Use the confirmed working Groq model
       messages: [
         {
-          role: "system",
+          role: 'system',
           content:
-            "You are a knowledgeable AI pharmacist assistant helping users understand supplements and medications. Provide accurate, helpful information but always remind users to consult healthcare professionals for medical advice.",
+            'You are a knowledgeable AI pharmacist assistant helping users understand supplements and medications. Provide accurate, helpful information but always remind users to consult healthcare professionals for medical advice.',
         },
         {
-          role: "user",
+          role: 'user',
           content: prompt,
         },
       ],
@@ -148,14 +164,19 @@ class HuggingFaceService {
     };
 
     try {
-      const response = await fetch(`${this.groqBaseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.groqApiKey}`,
-          "Content-Type": "application/json",
+      const response = await secureFetch(
+        `${this.groqBaseUrl}/chat/completions`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${this.groqApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
         },
-        body: JSON.stringify(payload),
-      });
+        userId,
+        'groq'
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -166,12 +187,12 @@ class HuggingFaceService {
       const generatedText = data.choices?.[0]?.message?.content;
 
       if (!generatedText) {
-        throw new Error("No content received from Groq API.");
+        throw new Error('No content received from Groq API.');
       }
 
       return generatedText;
     } catch (error: any) {
-      console.error("Error calling Groq API:", error);
+      console.error('Error calling Groq API:', error);
       throw new Error(`Failed to get response from Groq: ${error.message}`);
     }
   }
@@ -186,14 +207,14 @@ class HuggingFaceService {
 
     // Interaction queries
     if (
-      lowerPrompt.includes("interact") ||
-      lowerPrompt.includes("mix") ||
-      lowerPrompt.includes("combine")
+      lowerPrompt.includes('interact') ||
+      lowerPrompt.includes('mix') ||
+      lowerPrompt.includes('combine')
     ) {
-      if (lowerPrompt.includes("warfarin")) {
-        return "Warfarin has several important interactions with supplements. Vitamin K can reduce its effectiveness, while vitamin E, fish oil, garlic, and ginkgo may increase bleeding risk. Always maintain consistent vitamin K intake and consult your doctor before adding any supplements to your regimen.";
+      if (lowerPrompt.includes('warfarin')) {
+        return 'Warfarin has several important interactions with supplements. Vitamin K can reduce its effectiveness, while vitamin E, fish oil, garlic, and ginkgo may increase bleeding risk. Always maintain consistent vitamin K intake and consult your doctor before adding any supplements to your regimen.';
       }
-      if (lowerPrompt.includes("statin")) {
+      if (lowerPrompt.includes('statin')) {
         return "Statins can interact with several supplements. Red yeast rice contains natural statins and shouldn't be combined. High-dose niacin may increase muscle damage risk. CoQ10 is often recommended with statins as they may deplete this nutrient. Always discuss supplement use with your healthcare provider.";
       }
       return "Many medications and supplements can interact. Common interactions include blood thinners with vitamin K or fish oil, antidepressants with St. John's Wort, and diabetes medications with chromium. Always consult your healthcare provider before combining medications with supplements.";
@@ -201,45 +222,45 @@ class HuggingFaceService {
 
     // Dosage queries
     if (
-      lowerPrompt.includes("dose") ||
-      lowerPrompt.includes("dosage") ||
-      lowerPrompt.includes("how much")
+      lowerPrompt.includes('dose') ||
+      lowerPrompt.includes('dosage') ||
+      lowerPrompt.includes('how much')
     ) {
-      if (lowerPrompt.includes("vitamin d")) {
-        return "Vitamin D dosing varies by individual needs. General recommendations are 600-800 IU daily for adults, but those with deficiency may need 1,000-4,000 IU. The upper limit is 4,000 IU daily. Blood testing can help determine your optimal dose. Consult your healthcare provider for personalized recommendations.";
+      if (lowerPrompt.includes('vitamin d')) {
+        return 'Vitamin D dosing varies by individual needs. General recommendations are 600-800 IU daily for adults, but those with deficiency may need 1,000-4,000 IU. The upper limit is 4,000 IU daily. Blood testing can help determine your optimal dose. Consult your healthcare provider for personalized recommendations.';
       }
-      if (lowerPrompt.includes("magnesium")) {
-        return "Magnesium dosing depends on the form and purpose. For general health: 200-400mg daily. Magnesium citrate (150-300mg) helps with constipation. Magnesium glycinate (200-400mg) is best for sleep and anxiety without digestive effects. Start low and increase gradually to avoid diarrhea.";
+      if (lowerPrompt.includes('magnesium')) {
+        return 'Magnesium dosing depends on the form and purpose. For general health: 200-400mg daily. Magnesium citrate (150-300mg) helps with constipation. Magnesium glycinate (200-400mg) is best for sleep and anxiety without digestive effects. Start low and increase gradually to avoid diarrhea.';
       }
-      return "Supplement dosing varies by individual needs, age, and health conditions. Always start with the lowest recommended dose and follow product instructions. For personalized dosing, consult with a healthcare provider who can consider your specific health needs and current medications.";
+      return 'Supplement dosing varies by individual needs, age, and health conditions. Always start with the lowest recommended dose and follow product instructions. For personalized dosing, consult with a healthcare provider who can consider your specific health needs and current medications.';
     }
 
     // Form/type queries
     if (
-      lowerPrompt.includes("best form") ||
-      lowerPrompt.includes("which type") ||
-      lowerPrompt.includes("difference between")
+      lowerPrompt.includes('best form') ||
+      lowerPrompt.includes('which type') ||
+      lowerPrompt.includes('difference between')
     ) {
-      if (lowerPrompt.includes("b12")) {
+      if (lowerPrompt.includes('b12')) {
         return "For B12, methylcobalamin is generally preferred as it's the active form your body uses directly. It's especially beneficial for those with MTHFR mutations. Cyanocobalamin is cheaper but requires conversion in the body. Sublingual forms may offer better absorption than regular tablets.";
       }
-      if (lowerPrompt.includes("magnesium")) {
-        return "Different magnesium forms serve different purposes: Glycinate for sleep/anxiety (high absorption, gentle), Citrate for constipation relief, Threonate for brain health, Malate for energy/muscles. Avoid oxide except for constipation as it has poor absorption. Choose based on your primary health goal.";
+      if (lowerPrompt.includes('magnesium')) {
+        return 'Different magnesium forms serve different purposes: Glycinate for sleep/anxiety (high absorption, gentle), Citrate for constipation relief, Threonate for brain health, Malate for energy/muscles. Avoid oxide except for constipation as it has poor absorption. Choose based on your primary health goal.';
       }
-      return "Supplement forms vary in bioavailability and effects. Generally, chelated minerals, methylated B vitamins, and liposomal formulations offer superior absorption. The best form depends on your specific needs, tolerance, and health goals. Consider consulting a healthcare provider for personalized recommendations.";
+      return 'Supplement forms vary in bioavailability and effects. Generally, chelated minerals, methylated B vitamins, and liposomal formulations offer superior absorption. The best form depends on your specific needs, tolerance, and health goals. Consider consulting a healthcare provider for personalized recommendations.';
     }
 
     // Safety queries
     if (
-      lowerPrompt.includes("safe") ||
-      lowerPrompt.includes("side effect") ||
-      lowerPrompt.includes("risk")
+      lowerPrompt.includes('safe') ||
+      lowerPrompt.includes('side effect') ||
+      lowerPrompt.includes('risk')
     ) {
-      return "Supplement safety depends on quality, dosage, and individual factors. Choose third-party tested products, follow recommended doses, and be aware of potential interactions with medications. Common side effects vary by supplement. Always consult healthcare providers if you have health conditions or take medications.";
+      return 'Supplement safety depends on quality, dosage, and individual factors. Choose third-party tested products, follow recommended doses, and be aware of potential interactions with medications. Common side effects vary by supplement. Always consult healthcare providers if you have health conditions or take medications.';
     }
 
     // Generic helpful response
-    return "I can help you understand supplements and their interactions. For specific questions, please ask about dosing, forms, interactions, or safety. Remember, while I provide educational information, always consult with healthcare professionals for personalized medical advice.";
+    return 'I can help you understand supplements and their interactions. For specific questions, please ask about dosing, forms, interactions, or safety. Remember, while I provide educational information, always consult with healthcare professionals for personalized medical advice.';
   }
 
   /**
@@ -259,7 +280,7 @@ class HuggingFaceService {
       // Check cache first
       const cached = this.getCachedAnalysis(cacheKey);
       if (cached) {
-        console.log("📦 Using cached analysis for:", product.name);
+        console.log('📦 Using cached analysis for:', product.name);
         return cached;
       }
 
@@ -280,7 +301,7 @@ class HuggingFaceService {
           return finalAnalysis;
         } catch (aiError) {
           console.error(
-            "AI enhancement failed for product analysis, using rule-based analysis:",
+            'AI enhancement failed for product analysis, using rule-based analysis:',
             aiError
           );
           this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base if AI failed
@@ -289,16 +310,17 @@ class HuggingFaceService {
       } else {
         // Skip AI enhancement
         console.log(
-          "⚠️ Using rule-based analysis only (AI disabled or no API key)"
+          '⚠️ Using rule-based analysis only (AI disabled or no API key)'
         );
         this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base analysis
         return baseAnalysis;
       }
     } catch (error) {
-      console.error("Product analysis error (outer catch):", error);
+      console.error('Product analysis error (outer catch):', error);
       // Fallback to rule-based analysis even if outer try-catch fails
       const fallbackAnalysis = this.generateAdvancedRuleBasedAnalysis(product);
-      this.cacheAnalysis(cacheKey, fallbackAnalysis); // Cache fallback
+      const fallbackCacheKey = this.generateCacheKey(product);
+      this.cacheAnalysis(fallbackCacheKey, fallbackAnalysis); // Cache fallback
       return fallbackAnalysis;
     }
   }
@@ -349,7 +371,7 @@ class HuggingFaceService {
         }
       }
     } catch (error) {
-      console.error("AI enhancement internal error:", error);
+      console.error('AI enhancement internal error:', error);
     }
 
     return enhancements; // Return only the AI-derived enhancements
@@ -375,7 +397,7 @@ class HuggingFaceService {
       const response = await this.callGroqAPI(prompt); // Use the existing callGroqAPI
       return this.cleanAIResponse(response);
     } catch (error) {
-      console.error("Groq reasoning generation failed:", error);
+      console.error('Groq reasoning generation failed:', error);
       return this.generateDefaultReasoning(product, analysis); // Fallback on Groq error
     }
   }
@@ -397,7 +419,7 @@ class HuggingFaceService {
         avoidIf: ingredientAnalysis.warnings.slice(0, 4),
       };
     } catch (error) {
-      console.error("AI recommendations failed:", error);
+      console.error('AI recommendations failed:', error);
       return null;
     }
   }
@@ -415,7 +437,7 @@ class HuggingFaceService {
 
     if (!this.apiKey) {
       console.warn(
-        "HuggingFace API key not set, skipping ingredient safety classification."
+        'HuggingFace API key not set, skipping ingredient safety classification.'
       );
       return { benefits, warnings };
     }
@@ -430,7 +452,7 @@ class HuggingFaceService {
 
       for (const ingredient of topIngredients) {
         const safetyPrompt = `Supplement ingredient "${ingredient.name}" (${
-          ingredient.form || "standard form"
+          ingredient.form || 'standard form'
         }) safety assessment:`;
 
         try {
@@ -448,11 +470,11 @@ class HuggingFaceService {
                   inputs: safetyPrompt,
                   parameters: {
                     candidate_labels: [
-                      "safe for general use",
-                      "beneficial for health",
-                      "requires medical supervision",
-                      "may cause side effects",
-                      "not recommended for certain groups",
+                      'safe for general use',
+                      'beneficial for health',
+                      'requires medical supervision',
+                      'may cause side effects',
+                      'not recommended for certain groups',
                     ],
                     multi_label: true,
                     threshold: 0.1, // Lower threshold to get more labels initially
@@ -486,12 +508,12 @@ class HuggingFaceService {
               const score = scores[index] || 0;
               if (score > 0.6) {
                 // Use a slightly lower confidence threshold for inclusion
-                if (label.includes("safe") || label.includes("beneficial")) {
+                if (label.includes('safe') || label.includes('beneficial')) {
                   benefits.push(`${ingredient.name}: ${label}`);
                 } else if (
-                  label.includes("supervision") ||
-                  label.includes("side effects") ||
-                  label.includes("not recommended")
+                  label.includes('supervision') ||
+                  label.includes('side effects') ||
+                  label.includes('not recommended')
                 ) {
                   warnings.push(`${ingredient.name}: ${label}`);
                 }
@@ -503,7 +525,7 @@ class HuggingFaceService {
         }
       }
     } catch (error) {
-      console.error("Ingredient safety analysis failed:", error);
+      console.error('Ingredient safety analysis failed:', error);
     }
 
     return { benefits, warnings };
@@ -517,7 +539,7 @@ class HuggingFaceService {
    */
   async generateEmbeddings(texts: string[]): Promise<number[][]> {
     if (!this.apiKey) {
-      throw new Error("HuggingFace API key not configured for embeddings.");
+      throw new Error('HuggingFace API key not configured for embeddings.');
     }
     if (!texts || texts.length === 0) {
       return []; // Return empty array if no texts provided
@@ -537,19 +559,19 @@ class HuggingFaceService {
       if (
         Array.isArray(response) &&
         response.every(
-          (item) =>
-            Array.isArray(item) && item.every((val) => typeof val === "number")
+          item =>
+            Array.isArray(item) && item.every(val => typeof val === 'number')
         )
       ) {
         return response as number[][];
       } else {
-        console.error("Invalid embeddings response structure:", response);
-        throw new Error("Invalid response format for embeddings.");
+        console.error('Invalid embeddings response structure:', response);
+        throw new Error('Invalid response format for embeddings.');
       }
     } catch (error: any) {
-      console.error("Failed to generate embeddings:", error);
+      console.error('Failed to generate embeddings:', error);
       throw new Error(
-        `Embeddings generation failed: ${error.message || "Unknown error"}`
+        `Embeddings generation failed: ${error.message || 'Unknown error'}`
       );
     }
   }
@@ -595,7 +617,7 @@ class HuggingFaceService {
               error.message || error
             })`
           );
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          await new Promise(resolve => setTimeout(resolve, delay));
         }
       }
     }
@@ -612,19 +634,19 @@ class HuggingFaceService {
    */
   private async callHuggingFace(payload: any, model: string): Promise<any> {
     if (!this.apiKey) {
-      throw new Error("HuggingFace API key not configured");
+      throw new Error('HuggingFace API key not configured');
     }
 
     const url = `${this.baseUrl}/${model}`;
 
     try {
       const response = await fetch(url, {
-        method: "POST",
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
-          "Content-Type": "application/json",
-          "x-wait-for-model": "true", // Wait up to 10s for model to load
-          "x-use-cache": "true", // Leverage HuggingFace's internal caching
+          'Content-Type': 'application/json',
+          'x-wait-for-model': 'true', // Wait up to 10s for model to load
+          'x-use-cache': 'true', // Leverage HuggingFace's internal caching
         },
         body: JSON.stringify(payload),
       });
@@ -643,14 +665,14 @@ class HuggingFaceService {
         if (
           response.status === 503 &&
           errorData &&
-          typeof errorData.estimated_time === "number"
+          typeof errorData.estimated_time === 'number'
         ) {
           return errorData; // Model loading error
         }
 
         throw new Error(
           `HuggingFace API error (${model}): ${response.status} - ${
-            errorData.error || text || "Unknown error"
+            errorData.error || text || 'Unknown error'
           }`
         );
       }
@@ -667,7 +689,7 @@ class HuggingFaceService {
     } catch (error: any) {
       if (
         error instanceof SyntaxError &&
-        error.message.includes("JSON Parse error")
+        error.message.includes('JSON Parse error')
       ) {
         console.error(`JSON parsing error for model ${model}:`, error);
         throw new Error(
@@ -713,7 +735,7 @@ class HuggingFaceService {
 
     let ingredients = 50 + variation;
     let bioavailability = 45 + variation;
-    let dosage = 60 + variation * 0.5;
+    const dosage = 60 + variation * 0.5;
     let purity = product.thirdPartyTested ? 80 : 45;
     let value = 55 + variation;
 
@@ -722,36 +744,36 @@ class HuggingFaceService {
 
     // Premium brand bonuses
     const premiumBrands = [
-      "thorne",
-      "life extension",
-      "jarrow",
-      "now foods",
+      'thorne',
+      'life extension',
+      'jarrow',
+      'now foods',
       "doctor's best",
-      "nature made",
-      "nordic naturals",
-      "pure encapsulations",
-      "garden of life",
-      "solgar",
-      "nutricost",
+      'nature made',
+      'nordic naturals',
+      'pure encapsulations',
+      'garden of life',
+      'solgar',
+      'nutricost',
     ];
 
     const budgetBrands = [
-      "spring valley",
-      "equate",
-      "kirkland",
+      'spring valley',
+      'equate',
+      'kirkland',
       "member's mark",
       "nature's bounty",
-      "cvs health",
-      "walmart",
-      "amazon basics",
+      'cvs health',
+      'walmart',
+      'amazon basics',
     ];
 
-    if (premiumBrands.some((brand) => brandName.includes(brand))) {
+    if (premiumBrands.some(brand => brandName.includes(brand))) {
       ingredients += 20;
       purity += 25;
       bioavailability += 15;
       value -= 10;
-    } else if (budgetBrands.some((brand) => brandName.includes(brand))) {
+    } else if (budgetBrands.some(brand => brandName.includes(brand))) {
       ingredients -= 15;
       purity -= 20;
       value += 20;
@@ -785,30 +807,30 @@ class HuggingFaceService {
     const productName = product.name.toLowerCase();
 
     // Fish oil/Omega-3
-    if (productName.includes("fish oil") || productName.includes("omega")) {
+    if (productName.includes('fish oil') || productName.includes('omega')) {
       scores.bioavailability += 15;
       if (
-        productName.includes("triglyceride") ||
-        productName.includes("re-esterified")
+        productName.includes('triglyceride') ||
+        productName.includes('re-esterified')
       ) {
         scores.bioavailability += 25;
         scores.ingredients += 20;
-      } else if (productName.includes("ethyl ester")) {
+      } else if (productName.includes('ethyl ester')) {
         scores.bioavailability -= 10;
       }
     }
 
     // Vitamin D
-    if (productName.includes("vitamin d")) {
+    if (productName.includes('vitamin d')) {
       if (
-        productName.includes("d3") ||
-        productName.includes("cholecalciferol")
+        productName.includes('d3') ||
+        productName.includes('cholecalciferol')
       ) {
         scores.bioavailability += 25;
         scores.ingredients += 20;
       } else if (
-        productName.includes("d2") ||
-        productName.includes("ergocalciferol")
+        productName.includes('d2') ||
+        productName.includes('ergocalciferol')
       ) {
         scores.bioavailability -= 15;
         scores.ingredients -= 10;
@@ -816,69 +838,69 @@ class HuggingFaceService {
     }
 
     // B12
-    if (productName.includes("b12") || productName.includes("cobalamin")) {
-      if (productName.includes("methyl")) {
+    if (productName.includes('b12') || productName.includes('cobalamin')) {
+      if (productName.includes('methyl')) {
         scores.bioavailability += 30;
         scores.ingredients += 25;
-      } else if (productName.includes("cyano")) {
+      } else if (productName.includes('cyano')) {
         scores.bioavailability -= 20;
         scores.ingredients -= 15;
       }
     }
 
     // Magnesium
-    if (productName.includes("magnesium")) {
+    if (productName.includes('magnesium')) {
       if (
-        productName.includes("glycinate") ||
-        productName.includes("citrate") ||
-        productName.includes("malate") ||
-        productName.includes("threonate")
+        productName.includes('glycinate') ||
+        productName.includes('citrate') ||
+        productName.includes('malate') ||
+        productName.includes('threonate')
       ) {
         scores.bioavailability += 25;
         scores.ingredients += 20;
-      } else if (productName.includes("oxide")) {
+      } else if (productName.includes('oxide')) {
         scores.bioavailability -= 25;
         scores.ingredients -= 20;
       }
     }
 
     // Zinc
-    if (productName.includes("zinc")) {
+    if (productName.includes('zinc')) {
       if (
-        productName.includes("picolinate") ||
-        productName.includes("citrate")
+        productName.includes('picolinate') ||
+        productName.includes('citrate')
       ) {
         scores.bioavailability += 20;
         scores.ingredients += 15;
-      } else if (productName.includes("oxide")) {
+      } else if (productName.includes('oxide')) {
         scores.bioavailability -= 15;
       }
     }
 
     // Probiotics
-    if (productName.includes("probiotic")) {
+    if (productName.includes('probiotic')) {
       if (
-        productName.includes("refrigerated") ||
-        productName.includes("live")
+        productName.includes('refrigerated') ||
+        productName.includes('live')
       ) {
         scores.purity += 20;
         scores.ingredients += 15;
       }
       if (
-        productName.includes("billion cfu") ||
-        productName.includes("strain")
+        productName.includes('billion cfu') ||
+        productName.includes('strain')
       ) {
         scores.dosage += 15;
       }
     }
 
     // Multivitamins
-    if (productName.includes("multivitamin") || productName.includes("multi")) {
+    if (productName.includes('multivitamin') || productName.includes('multi')) {
       scores.ingredients += 5;
       scores.bioavailability -= 15;
       scores.dosage -= 10;
 
-      if (productName.includes("whole food") || productName.includes("raw")) {
+      if (productName.includes('whole food') || productName.includes('raw')) {
         scores.bioavailability += 20;
         scores.ingredients += 15;
       }
@@ -920,48 +942,48 @@ class HuggingFaceService {
 
     if (product.thirdPartyTested) {
       strengths.push({
-        point: "Independent quality verification",
-        detail: "Third-party tested for purity, potency, and safety compliance",
-        importance: "high",
-        category: "quality",
+        point: 'Independent quality verification',
+        detail: 'Third-party tested for purity, potency, and safety compliance',
+        importance: 'high',
+        category: 'quality',
       });
     }
 
     const premiumBrands = [
-      "thorne",
-      "life extension",
-      "jarrow",
-      "nordic naturals",
-      "pure encapsulations",
-      "garden of life",
+      'thorne',
+      'life extension',
+      'jarrow',
+      'nordic naturals',
+      'pure encapsulations',
+      'garden of life',
     ];
 
-    if (premiumBrands.some((brand) => brandName.includes(brand))) {
+    if (premiumBrands.some(brand => brandName.includes(brand))) {
       strengths.push({
-        point: "Reputable brand with quality track record",
-        detail: "Manufacturer known for high-quality supplements and research",
-        importance: "medium",
-        category: "quality",
+        point: 'Reputable brand with quality track record',
+        detail: 'Manufacturer known for high-quality supplements and research',
+        importance: 'medium',
+        category: 'quality',
       });
     }
 
     // Check for quality forms
     if (product.ingredients) {
       const hasQualityForms = product.ingredients.some(
-        (ing) =>
-          ing.form?.toLowerCase().includes("methylcobalamin") ||
-          ing.form?.toLowerCase().includes("methylfolate") ||
-          ing.form?.toLowerCase().includes("chelated") ||
-          ing.form?.toLowerCase().includes("liposomal") ||
-          ing.form?.toLowerCase().includes("glycinate")
+        ing =>
+          ing.form?.toLowerCase().includes('methylcobalamin') ||
+          ing.form?.toLowerCase().includes('methylfolate') ||
+          ing.form?.toLowerCase().includes('chelated') ||
+          ing.form?.toLowerCase().includes('liposomal') ||
+          ing.form?.toLowerCase().includes('glycinate')
       );
 
       if (hasQualityForms) {
         strengths.push({
-          point: "Premium bioavailable forms",
-          detail: "Uses highly absorbable forms for better effectiveness",
-          importance: "high",
-          category: "efficacy",
+          point: 'Premium bioavailable forms',
+          detail: 'Uses highly absorbable forms for better effectiveness',
+          importance: 'high',
+          category: 'efficacy',
         });
       }
     }
@@ -981,46 +1003,46 @@ class HuggingFaceService {
 
     if (!product.thirdPartyTested) {
       weaknesses.push({
-        point: "No independent quality verification",
-        detail: "Quality and purity claims not verified by third-party testing",
-        importance: "medium",
-        category: "quality",
+        point: 'No independent quality verification',
+        detail: 'Quality and purity claims not verified by third-party testing',
+        importance: 'medium',
+        category: 'quality',
       });
     }
 
     const budgetBrands = [
-      "spring valley",
-      "equate",
-      "kirkland",
-      "cvs health",
-      "walmart",
+      'spring valley',
+      'equate',
+      'kirkland',
+      'cvs health',
+      'walmart',
     ];
 
-    if (budgetBrands.some((brand) => brandName.includes(brand))) {
+    if (budgetBrands.some(brand => brandName.includes(brand))) {
       weaknesses.push({
-        point: "Budget-tier manufacturing",
+        point: 'Budget-tier manufacturing',
         detail:
-          "Generic brands may use lower-quality ingredients and less stringent testing",
-        importance: "medium",
-        category: "quality",
+          'Generic brands may use lower-quality ingredients and less stringent testing',
+        importance: 'medium',
+        category: 'quality',
       });
     }
 
     // Check for poor forms
     if (product.ingredients) {
       const hasPoorForms = product.ingredients.some(
-        (ing) =>
-          ing.form?.toLowerCase().includes("oxide") ||
-          ing.form?.toLowerCase().includes("cyanocobalamin") ||
-          ing.form?.toLowerCase().includes("folic acid")
+        ing =>
+          ing.form?.toLowerCase().includes('oxide') ||
+          ing.form?.toLowerCase().includes('cyanocobalamin') ||
+          ing.form?.toLowerCase().includes('folic acid')
       );
 
       if (hasPoorForms) {
         weaknesses.push({
-          point: "Contains poorly absorbed forms",
-          detail: "Some ingredients use forms with lower bioavailability",
-          importance: "high",
-          category: "efficacy",
+          point: 'Contains poorly absorbed forms',
+          detail: 'Some ingredients use forms with lower bioavailability',
+          importance: 'high',
+          category: 'efficacy',
         });
       }
     }
@@ -1039,42 +1061,42 @@ class HuggingFaceService {
     const productName = product.name.toLowerCase();
 
     if (product.thirdPartyTested) {
-      goodFor.push("Quality-conscious consumers");
+      goodFor.push('Quality-conscious consumers');
     }
 
     // Product-specific recommendations
-    if (productName.includes("fish oil") || productName.includes("omega")) {
-      goodFor.push("Heart health support", "Anti-inflammatory benefits");
-      avoidIf.push("Fish allergies", "Blood thinning medications");
+    if (productName.includes('fish oil') || productName.includes('omega')) {
+      goodFor.push('Heart health support', 'Anti-inflammatory benefits');
+      avoidIf.push('Fish allergies', 'Blood thinning medications');
     }
 
-    if (productName.includes("vitamin d")) {
-      goodFor.push("Bone health", "Immune support", "Winter supplementation");
-      avoidIf.push("Hypercalcemia", "Kidney disease");
+    if (productName.includes('vitamin d')) {
+      goodFor.push('Bone health', 'Immune support', 'Winter supplementation');
+      avoidIf.push('Hypercalcemia', 'Kidney disease');
     }
 
-    if (productName.includes("b12")) {
-      goodFor.push("Energy support", "Vegetarians and vegans");
-      if (!productName.includes("methyl")) {
-        avoidIf.push("MTHFR gene mutations (use methylated form)");
+    if (productName.includes('b12')) {
+      goodFor.push('Energy support', 'Vegetarians and vegans');
+      if (!productName.includes('methyl')) {
+        avoidIf.push('MTHFR gene mutations (use methylated form)');
       }
     }
 
-    if (productName.includes("magnesium")) {
-      goodFor.push("Muscle relaxation", "Sleep support", "Stress management");
-      if (productName.includes("oxide")) {
-        avoidIf.push("Those needing high absorption");
+    if (productName.includes('magnesium')) {
+      goodFor.push('Muscle relaxation', 'Sleep support', 'Stress management');
+      if (productName.includes('oxide')) {
+        avoidIf.push('Those needing high absorption');
       }
     }
 
-    if (productName.includes("probiotic")) {
-      goodFor.push("Digestive health", "Post-antibiotic recovery");
-      avoidIf.push("Immunocompromised individuals");
+    if (productName.includes('probiotic')) {
+      goodFor.push('Digestive health', 'Post-antibiotic recovery');
+      avoidIf.push('Immunocompromised individuals');
     }
 
-    if (productName.includes("zinc")) {
-      goodFor.push("Immune support", "Wound healing");
-      avoidIf.push("Copper deficiency", "Taking with calcium or iron");
+    if (productName.includes('zinc')) {
+      goodFor.push('Immune support', 'Wound healing');
+      avoidIf.push('Copper deficiency', 'Taking with calcium or iron');
     }
 
     return { goodFor, avoidIf };
@@ -1101,32 +1123,32 @@ class HuggingFaceService {
     reasoning += `while ${worstCategory[0]} needs improvement (${worstCategory[1]}/100). `;
 
     // Add specific insights based on product type
-    if (productName.includes("fish oil") || productName.includes("omega")) {
+    if (productName.includes('fish oil') || productName.includes('omega')) {
       reasoning +=
-        "Fish oil quality varies significantly by processing method. ";
-      if (productName.includes("triglyceride")) {
+        'Fish oil quality varies significantly by processing method. ';
+      if (productName.includes('triglyceride')) {
         reasoning +=
-          "The triglyceride form offers superior absorption compared to ethyl esters. ";
+          'The triglyceride form offers superior absorption compared to ethyl esters. ';
       }
-    } else if (productName.includes("vitamin d")) {
-      reasoning += "Vitamin D3 is the preferred form for supplementation. ";
-    } else if (productName.includes("magnesium")) {
-      const form = productName.includes("glycinate")
-        ? "glycinate"
-        : productName.includes("citrate")
-        ? "citrate"
-        : productName.includes("oxide")
-        ? "oxide"
-        : "this";
+    } else if (productName.includes('vitamin d')) {
+      reasoning += 'Vitamin D3 is the preferred form for supplementation. ';
+    } else if (productName.includes('magnesium')) {
+      const form = productName.includes('glycinate')
+        ? 'glycinate'
+        : productName.includes('citrate')
+          ? 'citrate'
+          : productName.includes('oxide')
+            ? 'oxide'
+            : 'this';
       reasoning += `Magnesium ${form} has specific absorption characteristics and uses. `;
     }
 
     // Quality verification note
     if (product.thirdPartyTested) {
-      reasoning += "Third-party testing provides quality assurance. ";
+      reasoning += 'Third-party testing provides quality assurance. ';
     } else {
       reasoning +=
-        "Consider third-party tested products for verified quality. ";
+        'Consider third-party tested products for verified quality. ';
     }
 
     return reasoning;
@@ -1144,17 +1166,17 @@ class HuggingFaceService {
   ): string {
     const ingredientList = (product.ingredients || [])
       .slice(0, 5)
-      .map((ing) => `${ing.name} (${ing.form || "standard form"})`)
-      .join(", ");
+      .map(ing => `${ing.name} (${ing.form || 'standard form'})`)
+      .join(', ');
 
     return `Analyze this ${
-      product.category || "supplement"
+      product.category || 'supplement'
     } product for consumers:
 
 Product: ${product.name} by ${product.brand}
-Key Ingredients: ${ingredientList || "Not specified"}
+Key Ingredients: ${ingredientList || 'Not specified'}
 Quality Score: ${analysis.overallScore}/100
-Third-party Tested: ${product.thirdPartyTested ? "Yes" : "No"}
+Third-party Tested: ${product.thirdPartyTested ? 'Yes' : 'No'}
 
 Provide a concise analysis (max 150 words) covering:
 1. Overall quality assessment
@@ -1171,13 +1193,13 @@ Focus on practical, evidence-based insights that help consumers make informed de
    * @returns The cleaned and formatted text.
    */
   private cleanAIResponse(text: string): string {
-    if (!text) return "";
+    if (!text) return '';
 
-    let cleaned = text.trim().replace(/\s+/g, " ");
+    let cleaned = text.trim().replace(/\s+/g, ' ');
 
     // Remove incomplete sentences
     const sentences = cleaned.match(/[^.!?]+[.!?]+/g) || [];
-    cleaned = sentences.join(" ").trim();
+    cleaned = sentences.join(' ').trim();
 
     // Ensure proper capitalization
     if (cleaned.length > 0) {
@@ -1186,11 +1208,11 @@ Focus on practical, evidence-based insights that help consumers make informed de
 
     // Truncate if too long
     if (cleaned.length > 300) {
-      const lastPeriod = cleaned.lastIndexOf(".", 280);
+      const lastPeriod = cleaned.lastIndexOf('.', 280);
       if (lastPeriod > 200) {
         cleaned = cleaned.slice(0, lastPeriod + 1);
       } else {
-        cleaned = cleaned.slice(0, 280) + "...";
+        cleaned = cleaned.slice(0, 280) + '...';
       }
     }
 
@@ -1202,9 +1224,9 @@ Focus on practical, evidence-based insights that help consumers make informed de
    */
   private generateCacheKey(product: Product): string {
     const ingredientsHash = (product.ingredients || [])
-      .map((ing) => `${ing.name}:${ing.form || ""}`)
+      .map(ing => `${ing.name}:${ing.form || ''}`)
       .sort()
-      .join("|");
+      .join('|');
 
     return `analysis_${product.barcode || product.id}_${product.name}_${
       product.brand
@@ -1263,10 +1285,10 @@ Focus on practical, evidence-based insights that help consumers make informed de
   ): response is HuggingFaceTextResponse[] {
     if (Array.isArray(response)) {
       return (
-        response.length > 0 && typeof response[0]?.generated_text === "string"
+        response.length > 0 && typeof response[0]?.generated_text === 'string'
       );
     }
-    return response && typeof response.generated_text === "string";
+    return response && typeof response.generated_text === 'string';
   }
 
   private isValidClassificationResponse(
@@ -1274,7 +1296,7 @@ Focus on practical, evidence-based insights that help consumers make informed de
   ): response is HuggingFaceClassificationResponse {
     return (
       response &&
-      typeof response.sequence === "string" &&
+      typeof response.sequence === 'string' &&
       Array.isArray(response.labels) &&
       Array.isArray(response.scores) &&
       response.labels.length === response.scores.length
@@ -1284,9 +1306,9 @@ Focus on practical, evidence-based insights that help consumers make informed de
   private isModelLoadingError(response: any): response is HuggingFaceError {
     return (
       response &&
-      typeof response.error === "string" &&
-      response.error.includes("is currently loading") &&
-      typeof response.estimated_time === "number"
+      typeof response.error === 'string' &&
+      response.error.includes('is currently loading') &&
+      typeof response.estimated_time === 'number'
     );
   }
 
@@ -1303,7 +1325,7 @@ Focus on practical, evidence-based insights that help consumers make informed de
     console.log(
       `Waiting ${Math.round(waitTime / 1000)}s for ${model} to load...`
     );
-    await new Promise((resolve) => setTimeout(resolve, waitTime));
+    await new Promise(resolve => setTimeout(resolve, waitTime));
   }
 
   /**
@@ -1326,7 +1348,7 @@ Focus on practical, evidence-based insights that help consumers make informed de
    * @returns True if at least one service is available, false otherwise.
    */
   async testAIConnection(): Promise<boolean> {
-    console.log("Testing AI connections...");
+    console.log('Testing AI connections...');
 
     let hfSuccess = false;
     let groqSuccess = false;
@@ -1337,15 +1359,15 @@ Focus on practical, evidence-based insights that help consumers make informed de
         const response = await fetch(
           `${this.baseUrl}/${AI_MODELS.HUGGINGFACE.CLASSIFICATION}`,
           {
-            method: "POST",
+            method: 'POST',
             headers: {
               Authorization: `Bearer ${this.apiKey}`,
-              "Content-Type": "application/json",
+              'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              inputs: "Test supplement safety",
+              inputs: 'Test supplement safety',
               parameters: {
-                candidate_labels: ["safe", "unsafe"],
+                candidate_labels: ['safe', 'unsafe'],
               },
             }),
           }
@@ -1353,35 +1375,35 @@ Focus on practical, evidence-based insights that help consumers make informed de
         hfSuccess = response.ok;
         console.log(
           hfSuccess
-            ? "✅ HuggingFace classification API working"
-            : "❌ HuggingFace classification API failed"
+            ? '✅ HuggingFace classification API working'
+            : '❌ HuggingFace classification API failed'
         );
       } catch (error) {
-        console.log("❌ HuggingFace classification API error:", error);
+        console.log('❌ HuggingFace classification API error:', error);
       }
     } else {
-      console.warn("HuggingFace API key not set, skipping HF connection test.");
+      console.warn('HuggingFace API key not set, skipping HF connection test.');
     }
 
     // Test Groq if enabled
     if (this.useGroq) {
       try {
         // Use a simple prompt for Groq test
-        const response = await this.callGroqAPI("Hello, Groq test connection.");
+        const response = await this.callGroqAPI('Hello, Groq test connection.');
         groqSuccess = !!response; // If response is not empty, assume success
-        console.log("✅ Groq API connection successful");
+        console.log('✅ Groq API connection successful');
       } catch (error) {
-        console.log("❌ Groq API error:", error);
+        console.log('❌ Groq API error:', error);
       }
     } else {
-      console.warn("Groq API key not set, skipping Groq connection test.");
+      console.warn('Groq API key not set, skipping Groq connection test.');
     }
 
     const anySuccess = hfSuccess || groqSuccess;
     console.log(
       anySuccess
-        ? "✅ AI services available (at least one connection successful)"
-        : "⚠️ AI services unavailable, operating in rule-based/limited mode"
+        ? '✅ AI services available (at least one connection successful)'
+        : '⚠️ AI services unavailable, operating in rule-based/limited mode'
     );
 
     return anySuccess;
@@ -1392,7 +1414,7 @@ Focus on practical, evidence-based insights that help consumers make informed de
    */
   clearCache(): void {
     this.requestCache.clear();
-    console.log("✅ AI cache cleared");
+    console.log('✅ AI cache cleared');
   }
 }
 

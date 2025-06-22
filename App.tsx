@@ -1,12 +1,13 @@
 // App.tsx
-import React, { useEffect } from "react";
-import { StatusBar } from "expo-status-bar";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { AuthProvider, useAuth } from "./src/hooks/useAuth";
-import { AppNavigator } from "./src/navigation/AppNavigator";
-import { performanceMonitor } from "./src/services/performance/performanceMonitor";
-import { gamificationService } from "./src/services/gamification/gamificationService";
-import * as FileSystem from "expo-file-system";
+import React, { useEffect } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { AuthProvider, useAuth } from './src/hooks/useAuth';
+import { AppNavigator } from './src/navigation/AppNavigator';
+import { performanceMonitor } from './src/services/performance/performanceMonitor';
+import { gamificationService } from './src/services/gamification/gamificationService';
+// import { ErrorBoundary } from './src/components/common/ErrorBoundary';
+import * as FileSystem from 'expo-file-system';
 
 // Wrapper component to access auth context
 function AppContent() {
@@ -32,7 +33,7 @@ function AppContent() {
 export default function App() {
   useEffect(() => {
     // Start measuring app cold start time
-    performanceMonitor.startMeasure("cold_start");
+    performanceMonitor.startMeasure('cold_start');
 
     // Ensure the @anonymous directory exists for storage
     const ensureDirectoryExists = async () => {

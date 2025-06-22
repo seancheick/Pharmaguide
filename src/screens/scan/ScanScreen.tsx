@@ -1,5 +1,5 @@
 // src/screens/scan/ScanScreen.tsx
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,20 +7,22 @@ import {
   SafeAreaView,
   Alert,
   ActivityIndicator,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { Button, AnimatedTouchable } from "../../components/common";
-import { BarcodeScanner } from "./BarcodeScanner";
-import { ProductAnalysisResults } from "./ProductAnalysisResults";
-import { productService } from "../../services/products";
-import { useStackStore } from "../../stores/stackStore";
-import type { Product, ProductAnalysis } from "../../types";
-import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
+} from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import { Button, AnimatedTouchable } from '../../components/common';
+import { BarcodeScanner } from './BarcodeScanner';
+import { ProductAnalysisResults } from './ProductAnalysisResults';
+import { productService } from '../../services/products';
+import { useStackStore } from '../../stores/stackStore';
+import type { Product, ProductAnalysis } from '../../types';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
-type ScanScreenState = "idle" | "scanning" | "processing" | "results";
+type ScanScreenState = 'idle' | 'scanning' | 'processing' | 'results';
 
 export const ScanScreen = () => {
-  const [screenState, setScreenState] = useState<ScanScreenState>("idle");
+  const navigation = useNavigation();
+  const [screenState, setScreenState] = useState<ScanScreenState>('idle');
   const [product, setProduct] = useState<Product | null>(null);
   const [analysis, setAnalysis] = useState<ProductAnalysis | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -28,58 +30,92 @@ export const ScanScreen = () => {
   const { stack } = useStackStore();
 
   const startScanning = () => {
-    console.log("📱 Starting scanner...");
-    setScreenState("scanning");
+    console.log('📱 Starting scanner...');
+    setScreenState('scanning');
   };
 
   const handleBarcodeScanned = async (barcode: string) => {
-    console.log("🔍 Processing barcode:", barcode);
-    setScreenState("processing");
+    console.log('🔍 Processing barcode:', barcode);
+    setScreenState('processing');
     setIsLoading(true);
 
     try {
       const result = await productService.analyzeScannedProduct(barcode, stack);
       setProduct(result.product);
       setAnalysis(result.analysis);
-      setScreenState("results");
+      setScreenState('results');
       console.log(
-        "✅ Analysis complete - Score:",
+        '✅ Analysis complete - Score:',
         result.analysis.overallScore
       );
     } catch (error) {
-      console.error("Product analysis failed:", error);
-      Alert.alert(
-        "Analysis Failed",
-        "Unable to analyze this product. Please try scanning another barcode.",
-        [
-          {
-            text: "Try Again",
-            onPress: () => setScreenState("scanning"),
-          },
-          {
-            text: "Cancel",
-            onPress: () => setScreenState("idle"),
-            style: "cancel",
-          },
-        ]
-      );
+      console.error('Product analysis failed:', error);
+
+      // Check if it's a "product not found" error
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      const isProductNotFound =
+        errorMessage.toLowerCase().includes('not found') ||
+        errorMessage.toLowerCase().includes('no product');
+
+      if (isProductNotFound) {
+        Alert.alert(
+          'Product Not Found',
+          "This product isn't in our database yet. What would you like to do?",
+          [
+            {
+              text: 'Cancel',
+              onPress: () => setScreenState('idle'),
+              style: 'cancel',
+            },
+            {
+              text: 'Search Manually',
+              onPress: () => navigation.navigate('Search' as never),
+            },
+            {
+              text: 'Scan Label',
+              onPress: () => navigation.navigate('OCR' as never),
+            },
+            {
+              text: 'Submit Product',
+              onPress: () => navigation.navigate('ProductSubmission' as never),
+            },
+          ]
+        );
+      } else {
+        Alert.alert(
+          'Analysis Failed',
+          'Unable to analyze this product. Please try scanning another barcode.',
+          [
+            {
+              text: 'Try Again',
+              onPress: () => setScreenState('scanning'),
+            },
+            {
+              text: 'Cancel',
+              onPress: () => setScreenState('idle'),
+              style: 'cancel',
+            },
+          ]
+        );
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleScanAnother = () => {
-    console.log("🔄 Resetting for new scan");
+    console.log('🔄 Resetting for new scan');
     setProduct(null);
     setAnalysis(null);
-    setScreenState("scanning");
+    setScreenState('scanning');
   };
 
   const handleClose = () => {
-    console.log("❌ Closing scanner");
+    console.log('❌ Closing scanner');
     setProduct(null);
     setAnalysis(null);
-    setScreenState("idle");
+    setScreenState('idle');
   };
 
   const renderIdleState = () => (
@@ -98,7 +134,7 @@ export const ScanScreen = () => {
   // --- START: Conditional Rendering Logic ---
   // This is the crucial part that was likely missing or incorrectly structured.
   // We return a component based on the current screenState.
-  if (screenState === "scanning") {
+  if (screenState === 'scanning') {
     return (
       <BarcodeScanner
         onBarcodeScanned={handleBarcodeScanned}
@@ -107,7 +143,7 @@ export const ScanScreen = () => {
     );
   }
 
-  if (screenState === "processing") {
+  if (screenState === 'processing') {
     // The headerBar is integrated directly into this full-screen view
     return (
       <SafeAreaView style={styles.container}>
@@ -134,7 +170,7 @@ export const ScanScreen = () => {
     );
   }
 
-  if (screenState === "results" && product && analysis) {
+  if (screenState === 'results' && product && analysis) {
     // The headerBar is part of ProductAnalysisResults component's internal rendering
     return (
       <ProductAnalysisResults
@@ -150,7 +186,7 @@ export const ScanScreen = () => {
   // If none of the above states are met, it defaults to the idle state.
   return (
     <SafeAreaView style={styles.container}>
-      {screenState !== "idle" && (
+      {screenState !== 'idle' && (
         <View style={styles.header}>
           <AnimatedTouchable onPress={handleClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={COLORS.textPrimary} />
@@ -261,10 +297,10 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
   },
   header: {
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: SPACING.xxl,
   },
   iconContainer: {
@@ -272,8 +308,8 @@ const styles = StyleSheet.create({
     height: 120,
     borderRadius: 60,
     backgroundColor: COLORS.gray100,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: SPACING.lg,
   },
   title: {
@@ -281,12 +317,12 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.bold,
     color: COLORS.textPrimary,
     marginBottom: SPACING.sm,
-    textAlign: "center",
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: TYPOGRAPHY.sizes.base,
     color: COLORS.textSecondary,
-    textAlign: "center",
+    textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: SPACING.md,
   },
@@ -294,8 +330,8 @@ const styles = StyleSheet.create({
     marginVertical: SPACING.xl,
   },
   feature: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginBottom: SPACING.lg,
     paddingHorizontal: SPACING.md,
   },
@@ -304,8 +340,8 @@ const styles = StyleSheet.create({
     height: 48,
     borderRadius: 24,
     backgroundColor: COLORS.backgroundSecondary,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: SPACING.md,
   },
   featureText: {
@@ -323,7 +359,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   actions: {
-    alignItems: "center",
+    alignItems: 'center',
   },
   scanButton: {
     marginBottom: SPACING.lg,
@@ -331,7 +367,7 @@ const styles = StyleSheet.create({
   },
   helpButton: {
     paddingVertical: SPACING.sm,
-    backgroundColor: COLORS.success + "20",
+    backgroundColor: COLORS.success + '20',
     paddingHorizontal: SPACING.md,
     borderRadius: 8,
   },
@@ -342,21 +378,21 @@ const styles = StyleSheet.create({
   },
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingCard: {
     backgroundColor: COLORS.background,
     borderRadius: 20,
     padding: 32,
-    alignItems: "center",
+    alignItems: 'center',
     minWidth: 250,
   },
   loadingText: {
     marginTop: 16,
     fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: "600",
+    fontWeight: '600',
     color: COLORS.textPrimary,
   },
   loadingSubtext: {
@@ -366,16 +402,16 @@ const styles = StyleSheet.create({
   },
   startScanContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
   },
   startScanButton: {
     backgroundColor: COLORS.primary,
     padding: SPACING.xl,
     borderRadius: SPACING.xl,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
@@ -385,13 +421,13 @@ const styles = StyleSheet.create({
   startScanText: {
     marginTop: SPACING.md,
     fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: "600",
+    fontWeight: '600',
     color: COLORS.background,
   },
   headerBar: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.sm,
   },
@@ -405,7 +441,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.xl,
     fontSize: TYPOGRAPHY.sizes.base,
     color: COLORS.textSecondary,
-    textAlign: "center",
+    textAlign: 'center',
     paddingHorizontal: SPACING.lg,
   },
 });

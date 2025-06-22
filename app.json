@@ -39,8 +39,9 @@
       ]
     ],
     "extra": {
-      "supabaseUrl": "https://myxpwegapxhcodcipyxu.supabase.co",
-      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15eHB3ZWdhcHhoY29kY2lweXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0ODIyMjEsImV4cCI6MjA2NTA1ODIyMX0.Ik5kKxOfcVF9W155uc3V1LyxAGXYj_AZjiu5IhaGXIo"
+      "eas": {
+        "projectId": "your-eas-project-id"
+      }
     }
   }
 }
