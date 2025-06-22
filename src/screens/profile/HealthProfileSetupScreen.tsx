@@ -10,15 +10,16 @@ import {
   TouchableOpacity,
   Animated,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { ConsentModal } from '../../components/privacy/ConsentModal';
 import { privacyService } from '../../services/privacy/privacyService';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { ConsentType, ProfileSetupStep } from '../../types/healthProfile';
+import { HealthProfileSetupScreenProps } from '../../types/navigation';
 
-export const HealthProfileSetupScreen: React.FC = () => {
-  const navigation = useNavigation();
+export const HealthProfileSetupScreen: React.FC<
+  HealthProfileSetupScreenProps
+> = ({ navigation }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consents, setConsents] = useState<Record<ConsentType, boolean>>(
@@ -141,9 +142,9 @@ export const HealthProfileSetupScreen: React.FC = () => {
       medications: 'MedicationsScreen',
     };
 
-    const screenName = screenMap[stepId];
+    const screenName = screenMap[stepId] as keyof typeof screenMap;
     if (screenName) {
-      navigation.navigate(screenName as never);
+      navigation.navigate(screenName as any);
     }
   };
 
@@ -232,7 +233,7 @@ export const HealthProfileSetupScreen: React.FC = () => {
           <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Health Profile</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Home' as never)}>
+        <TouchableOpacity onPress={() => navigation.navigate('MainTabs')}>
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
       </View>
@@ -305,7 +306,7 @@ export const HealthProfileSetupScreen: React.FC = () => {
         <View style={styles.footer}>
           <TouchableOpacity
             style={styles.completeButton}
-            onPress={() => navigation.navigate('Home' as never)}
+            onPress={() => navigation.navigate('MainTabs')}
           >
             <Text style={styles.completeButtonText}>Start Using App</Text>
             <Ionicons name="arrow-forward" size={20} color={COLORS.white} />

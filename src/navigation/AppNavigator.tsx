@@ -22,11 +22,19 @@ import {
   HealthProfileSetupScreen,
   DemographicsScreen,
   MedicationsScreen,
+  HealthGoalsScreen,
+  HealthConditionsScreen,
+  AllergiesScreen,
+  SettingsScreen,
+  DataQualityScreen,
+  SupportScreen,
+  AboutScreen,
 } from '../screens/profile';
 import { COLORS } from '../constants';
+import { RootStackParamList, MainTabParamList } from '../types/navigation';
 
-const Stack = createStackNavigator();
-const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
 
 // Bottom tab navigator for main app screens
 const MainTabs = () => {
@@ -155,6 +163,62 @@ export const AppNavigator = () => {
             options={{
               headerShown: false,
               title: 'Medications & Supplements',
+            }}
+          />
+          <Stack.Screen
+            name="HealthGoalsScreen"
+            component={HealthGoalsScreen}
+            options={{
+              headerShown: false,
+              title: 'Health Goals',
+            }}
+          />
+          <Stack.Screen
+            name="HealthConditionsScreen"
+            component={HealthConditionsScreen}
+            options={{
+              headerShown: false,
+              title: 'Health Conditions',
+            }}
+          />
+          <Stack.Screen
+            name="AllergiesScreen"
+            component={AllergiesScreen}
+            options={{
+              headerShown: false,
+              title: 'Allergies',
+            }}
+          />
+          <Stack.Screen
+            name="SettingsScreen"
+            component={SettingsScreen}
+            options={{
+              headerShown: false,
+              title: 'Settings',
+            }}
+          />
+          <Stack.Screen
+            name="DataQualityScreen"
+            component={DataQualityScreen}
+            options={{
+              headerShown: false,
+              title: 'Data Quality',
+            }}
+          />
+          <Stack.Screen
+            name="SupportScreen"
+            component={SupportScreen}
+            options={{
+              headerShown: false,
+              title: 'Support',
+            }}
+          />
+          <Stack.Screen
+            name="AboutScreen"
+            component={AboutScreen}
+            options={{
+              headerShown: false,
+              title: 'About',
             }}
           />
           <Stack.Screen

@@ -14,6 +14,7 @@ export const COLORS = {
   success: '#22C55E',
   successLight: '#F0FDF4',
   info: '#3B82F6',
+  infoLight: '#EFF6FF',
 
   // Grays
   gray50: '#F9FAFB',

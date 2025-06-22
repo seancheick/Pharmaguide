@@ -13,11 +13,15 @@ import {
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { StackNavigationProp } from '@react-navigation/stack';
 import { useAuth } from '../../hooks/useAuth';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { RootStackParamList } from '../../types/navigation';
+
+type ProfileNavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const ProfileScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<ProfileNavigationProp>();
   const { user, signOut, loading: authLoading } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -117,17 +121,31 @@ export const ProfileScreen = () => {
   };
 
   const handleCreateAccount = () => {
-    navigation.navigate('Welcome' as never);
+    navigation.navigate('Welcome');
   };
 
   const handleSectionPress = (section: (typeof mainSections)[0]) => {
-    if (section.id === 'health_profile') {
-      navigation.navigate('HealthProfileSetup' as never);
-    } else {
-      Alert.alert(
-        'Coming Soon',
-        `${section.title} features are being developed and will be available soon!`
-      );
+    switch (section.id) {
+      case 'health_profile':
+        navigation.navigate('HealthProfileSetup');
+        break;
+      case 'settings':
+        navigation.navigate('SettingsScreen');
+        break;
+      case 'data_quality':
+        navigation.navigate('DataQualityScreen');
+        break;
+      case 'support':
+        navigation.navigate('SupportScreen');
+        break;
+      case 'about':
+        navigation.navigate('AboutScreen');
+        break;
+      default:
+        Alert.alert(
+          'Coming Soon',
+          `${section.title} features are being developed and will be available soon!`
+        );
     }
   };
 

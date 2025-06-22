@@ -1,5 +1,8 @@
 // src/types/index.ts
 
+// Navigation types
+export * from './navigation';
+
 // User types
 export interface User {
   id: string;
@@ -26,9 +29,9 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  aiResponseStyle: "concise" | "detailed" | "technical";
-  budgetRange: "budget" | "mid" | "premium";
-  primaryFocus: "safety" | "efficacy" | "value" | "naturalness";
+  aiResponseStyle: 'concise' | 'detailed' | 'technical';
+  budgetRange: 'budget' | 'mid' | 'premium';
+  primaryFocus: 'safety' | 'efficacy' | 'value' | 'naturalness';
   notifications: {
     push_enabled: boolean;
     email_enabled: boolean;
@@ -74,75 +77,75 @@ export interface Ingredient {
   unit: string;
   form: IngredientForm;
   dailyValuePercentage?: number;
-  bioavailability: "low" | "medium" | "high";
+  bioavailability: 'low' | 'medium' | 'high';
   evidenceLevel: EvidenceLevel;
-  category: "active" | "inactive" | "excipient";
+  category: 'active' | 'inactive' | 'excipient';
 }
 
 export interface AnalysisPoint {
   point: string;
   detail: string;
-  importance: "low" | "medium" | "high";
-  category: "safety" | "efficacy" | "quality" | "value";
+  importance: 'low' | 'medium' | 'high';
+  category: 'safety' | 'efficacy' | 'quality' | 'value';
 }
 
 export interface SafetyCheck {
-  status: "safe" | "caution" | "warning" | "critical";
+  status: 'safe' | 'caution' | 'warning' | 'critical';
   interactions: DrugInteraction[];
   contraindications: string[];
   warnings: string[];
 }
 
 export interface DrugInteraction {
-  type: "drug-drug" | "drug-supplement" | "supplement-supplement";
-  severity: "minor" | "moderate" | "major" | "critical"; // Assuming these are different from RiskLevel
+  type: 'drug-drug' | 'drug-supplement' | 'supplement-supplement';
+  severity: 'minor' | 'moderate' | 'major' | 'critical'; // Assuming these are different from RiskLevel
   description: string;
   recommendation: string;
   source: string;
 }
 
 export type ProductCategory =
-  | "vitamin"
-  | "mineral"
-  | "amino_acid"
-  | "herbal"
-  | "protein"
-  | "probiotic"
-  | "omega3"
-  | "multivitamin"
-  | "specialty";
+  | 'vitamin'
+  | 'mineral'
+  | 'amino_acid'
+  | 'herbal'
+  | 'protein'
+  | 'probiotic'
+  | 'omega3'
+  | 'multivitamin'
+  | 'specialty';
 
 export type IngredientForm =
-  | "methylcobalamin"
-  | "cyanocobalamin"
-  | "methylfolate"
-  | "folic_acid"
-  | "chelated"
-  | "citrate"
-  | "oxide"
-  | "glycinate"
-  | "liposomal"
-  | "other";
+  | 'methylcobalamin'
+  | 'cyanocobalamin'
+  | 'methylfolate'
+  | 'folic_acid'
+  | 'chelated'
+  | 'citrate'
+  | 'oxide'
+  | 'glycinate'
+  | 'liposomal'
+  | 'other';
 
 export type EvidenceLevel =
-  | "meta_analysis"
-  | "rct_studies"
-  | "clinical_trials"
-  | "observational"
-  | "case_reports"
-  | "theoretical"
-  | "marketing_claims";
+  | 'meta_analysis'
+  | 'rct_studies'
+  | 'clinical_trials'
+  | 'observational'
+  | 'case_reports'
+  | 'theoretical'
+  | 'marketing_claims';
 
-export type RiskLevel = "NONE" | "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+export type RiskLevel = 'NONE' | 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
 
 // --- START: Unified Interaction and Stack Types ---
 
 export interface InteractionDetail {
   type:
-    | "Drug-Drug"
-    | "Drug-Supplement"
-    | "Supplement-Supplement"
-    | "Nutrient-Limit";
+    | 'Drug-Drug'
+    | 'Drug-Supplement'
+    | 'Supplement-Supplement'
+    | 'Nutrient-Limit';
   severity: RiskLevel;
   message: string;
   mechanism?: string;
@@ -213,7 +216,7 @@ export interface UserStack {
   user_id: string;
   item_id: string;
   name: string;
-  type: "medication" | "supplement";
+  type: 'medication' | 'supplement';
   dosage: string;
   frequency: string;
   brand?: string;
