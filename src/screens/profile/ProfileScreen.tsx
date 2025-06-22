@@ -22,7 +22,13 @@ type ProfileNavigationProp = StackNavigationProp<RootStackParamList>;
 
 export const ProfileScreen = () => {
   const navigation = useNavigation<ProfileNavigationProp>();
-  const { user, signOut, loading: authLoading } = useAuth();
+  const {
+    user,
+    signOut,
+    loading: authLoading,
+    isAuthenticated,
+    isGuest,
+  } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   // 🎯 Mock profile data - would come from actual profile service
@@ -31,71 +37,49 @@ export const ProfileScreen = () => {
     pendingSubmissions: 2,
   };
 
-  // 🏥 1. HEALTH PROFILE - Main health-related features
-  const healthProfileSection = {
-    id: 'health_profile',
-    title: 'Health Profile',
-    description:
-      'Manage your health information for personalized recommendations',
-    icon: 'medical',
-    color: COLORS.primary,
-    completeness: profileData.completeness,
-    badge: undefined as number | undefined,
-  };
-
-  // ⚙️ 2. SETTINGS - App configuration
-  const settingsSection = {
-    id: 'settings',
-    title: 'Settings',
-    description: 'App configuration and preferences',
-    icon: 'settings',
-    color: COLORS.info,
-    completeness: undefined as number | undefined,
-    badge: undefined as number | undefined,
-  };
-
-  // 📊 3. DATA QUALITY - User contributions
-  const dataQualitySection = {
-    id: 'data_quality',
-    title: 'Data Quality',
-    description: 'Help improve our database and report issues',
-    icon: 'analytics',
-    color: COLORS.success,
-    badge:
-      profileData.pendingSubmissions > 0
-        ? profileData.pendingSubmissions
-        : undefined,
-    completeness: undefined as number | undefined,
-  };
-
-  // 🆘 4. SUPPORT - Help and assistance
-  const supportSection = {
-    id: 'support',
-    title: 'Support',
-    description: 'Get help and learn about our methodology',
-    icon: 'help-circle',
-    color: COLORS.warning,
-    completeness: undefined as number | undefined,
-    badge: undefined as number | undefined,
-  };
-
-  // ℹ️ 5. ABOUT - App information
-  const aboutSection = {
-    id: 'about',
-    title: 'About',
-    description: 'App information, terms, and credits',
-    icon: 'information-circle',
-    color: COLORS.textSecondary,
-    completeness: undefined as number | undefined,
-    badge: undefined as number | undefined,
-  };
-
+  // � CONCISE: Main profile sections configuration
   const mainSections = [
-    healthProfileSection,
-    settingsSection,
-    dataQualitySection,
-    supportSection,
-    aboutSection,
+    {
+      id: 'health_profile',
+      title: 'Health Profile',
+      description:
+        'Manage your health information for personalized recommendations',
+      icon: 'medical' as keyof typeof Ionicons.glyphMap,
+      color: COLORS.primary,
+      completeness: profileData.completeness,
+    },
+    {
+      id: 'settings',
+      title: 'Settings',
+      description: 'App configuration and preferences',
+      icon: 'settings' as keyof typeof Ionicons.glyphMap,
+      color: COLORS.info,
+    },
+    {
+      id: 'data_quality',
+      title: 'Data Quality',
+      description: 'Help improve our database and report issues',
+      icon: 'analytics' as keyof typeof Ionicons.glyphMap,
+      color: COLORS.success,
+      badge:
+        profileData.pendingSubmissions > 0
+          ? profileData.pendingSubmissions
+          : undefined,
+    },
+    {
+      id: 'support',
+      title: 'Support',
+      description: 'Get help and learn about our methodology',
+      icon: 'help-circle' as keyof typeof Ionicons.glyphMap,
+      color: COLORS.warning,
+    },
+    {
+      id: 'about',
+      title: 'About',
+      description: 'App information, terms, and credits',
+      icon: 'information-circle' as keyof typeof Ionicons.glyphMap,
+      color: COLORS.textSecondary,
+    },
   ];
 
   const handleSignOut = async () => {
@@ -225,7 +209,7 @@ export const ProfileScreen = () => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Profile</Text>
-          {user && user.email && (
+          {isAuthenticated && (
             <TouchableOpacity
               onPress={handleSignOut}
               style={styles.signOutButton}
@@ -236,7 +220,7 @@ export const ProfileScreen = () => {
         </View>
 
         {/* User Info (if authenticated) */}
-        {user && user.email && (
+        {isAuthenticated && (
           <View style={styles.userCard}>
             <View style={styles.userInfo}>
               <View style={styles.avatar}>
@@ -248,16 +232,16 @@ export const ProfileScreen = () => {
               </View>
               <View style={styles.userDetails}>
                 <Text style={styles.userName}>
-                  {user.email?.split('@')[0] || 'User'}
+                  {user?.email?.split('@')[0] || 'User'}
                 </Text>
-                <Text style={styles.userEmail}>{user.email}</Text>
+                <Text style={styles.userEmail}>{user?.email}</Text>
               </View>
             </View>
           </View>
         )}
 
         {/* Guest User Banner */}
-        {(!user || (!user.email && user.is_anonymous)) && (
+        {isGuest && (
           <View style={styles.guestBanner}>
             <MaterialIcons name="info" size={20} color={COLORS.info} />
             <Text style={styles.guestText}>

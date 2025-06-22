@@ -11,7 +11,6 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type {
@@ -20,9 +19,11 @@ import type {
   PregnancyStatus,
   Demographics,
 } from '../../types/healthProfile';
+import { DemographicsScreenProps } from '../../types/navigation';
 
-export const DemographicsScreen: React.FC = () => {
-  const navigation = useNavigation();
+export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
+  navigation,
+}) => {
   const [demographics, setDemographics] = useState<Partial<Demographics>>({});
   const [isLoading, setIsLoading] = useState(false);
 
@@ -173,7 +174,7 @@ export const DemographicsScreen: React.FC = () => {
       }
     >
       <Ionicons
-        name={option.icon as any}
+        name={option.icon as keyof typeof Ionicons.glyphMap}
         size={24}
         color={
           demographics.biologicalSex === option.value

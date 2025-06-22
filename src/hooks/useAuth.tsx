@@ -39,6 +39,8 @@ interface AuthContextType {
   session: Session | null;
   loading: boolean;
   error: AuthError | null;
+  isAuthenticated: boolean;
+  isGuest: boolean;
   signInAnonymously: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
@@ -82,6 +84,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<AuthError | null>(null);
+
+  // 🎯 Helper flags for cleaner authentication checks
+  const isAuthenticated = Boolean(user && user.email && !user.is_anonymous);
+  const isGuest = Boolean(!user || (!user.email && user.is_anonymous));
 
   /**
    * Transform database user to app user format
@@ -543,6 +549,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         session,
         loading,
         error,
+        isAuthenticated,
+        isGuest,
         signInAnonymously,
         signInWithEmail,
         signUpWithEmail,

@@ -12,18 +12,19 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { Medication } from '../../types/healthProfile';
+import { MedicationsScreenProps } from '../../types/navigation';
 
 interface StackItem extends Medication {
   interactionWarnings?: string[];
   riskLevel?: 'low' | 'moderate' | 'high' | 'critical';
 }
 
-export const MedicationsScreen: React.FC = () => {
-  const navigation = useNavigation();
+export const MedicationsScreen: React.FC<MedicationsScreenProps> = ({
+  navigation,
+}) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedType, setSelectedType] = useState<
     'prescription' | 'otc' | 'supplement'
@@ -139,7 +140,7 @@ export const MedicationsScreen: React.FC = () => {
           id: '1',
           name: 'Metformin 500mg',
           genericName: 'Metformin',
-          type: 'prescription',
+          type: 'prescription' as const,
           dosage: '500mg',
           frequency: 'Twice daily',
           active: true,
@@ -147,7 +148,7 @@ export const MedicationsScreen: React.FC = () => {
         {
           id: '2',
           name: 'Vitamin D3 1000 IU',
-          type: 'supplement',
+          type: 'supplement' as const,
           dosage: '1000 IU',
           frequency: 'Daily',
           active: true,
@@ -155,7 +156,7 @@ export const MedicationsScreen: React.FC = () => {
         {
           id: '3',
           name: 'Ibuprofen 200mg',
-          type: 'otc',
+          type: 'otc' as const,
           dosage: '200mg',
           frequency: 'As needed',
           active: true,
@@ -221,7 +222,7 @@ export const MedicationsScreen: React.FC = () => {
           <View style={styles.itemInfo}>
             <View style={styles.itemTitleRow}>
               <Ionicons
-                name={typeConfig?.icon as any}
+                name={typeConfig?.icon as keyof typeof Ionicons.glyphMap}
                 size={20}
                 color={typeConfig?.color}
               />
@@ -269,7 +270,7 @@ export const MedicationsScreen: React.FC = () => {
         <View style={styles.resultInfo}>
           <View style={styles.resultTitleRow}>
             <Ionicons
-              name={typeConfig?.icon as any}
+              name={typeConfig?.icon as keyof typeof Ionicons.glyphMap}
               size={18}
               color={typeConfig?.color}
             />
@@ -301,7 +302,7 @@ export const MedicationsScreen: React.FC = () => {
         </TouchableOpacity>
         <Text style={styles.title}>Medications & Supplements</Text>
         <TouchableOpacity
-          onPress={() => navigation.navigate('MyStack' as never)}
+          onPress={() => console.log('Navigate to MyStack - TODO: implement')}
         >
           <Ionicons name="layers" size={24} color={COLORS.primary} />
         </TouchableOpacity>
@@ -329,7 +330,7 @@ export const MedicationsScreen: React.FC = () => {
               onPress={() => setSelectedType(type.value)}
             >
               <Ionicons
-                name={type.icon as any}
+                name={type.icon as keyof typeof Ionicons.glyphMap}
                 size={20}
                 color={selectedType === type.value ? COLORS.white : type.color}
               />
