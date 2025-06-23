@@ -10,7 +10,8 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { HealthGoalsScreenProps } from '../../types/navigation';
 
@@ -18,7 +19,7 @@ interface HealthGoal {
   id: string;
   title: string;
   description: string;
-  icon: keyof typeof MaterialIcons.glyphMap;
+  icon: keyof typeof Ionicons.glyphMap;
   category: 'fitness' | 'wellness' | 'nutrition' | 'mental';
 }
 
@@ -27,7 +28,7 @@ const HEALTH_GOALS: HealthGoal[] = [
     id: 'muscle_building',
     title: 'Build Muscle',
     description: 'Increase muscle mass and strength',
-    icon: 'fitness-center',
+    icon: 'barbell',
     category: 'fitness',
   },
   {
@@ -41,7 +42,7 @@ const HEALTH_GOALS: HealthGoal[] = [
     id: 'energy_boost',
     title: 'Boost Energy',
     description: 'Increase daily energy levels',
-    icon: 'bolt',
+    icon: 'flash',
     category: 'wellness',
   },
   {
@@ -55,28 +56,28 @@ const HEALTH_GOALS: HealthGoal[] = [
     id: 'heart_health',
     title: 'Heart Health',
     description: 'Support cardiovascular health',
-    icon: 'favorite',
+    icon: 'heart',
     category: 'wellness',
   },
   {
     id: 'brain_health',
     title: 'Brain Health',
     description: 'Improve cognitive function',
-    icon: 'psychology',
+    icon: 'bulb',
     category: 'mental',
   },
   {
     id: 'sleep_quality',
     title: 'Better Sleep',
     description: 'Improve sleep quality and duration',
-    icon: 'bedtime',
+    icon: 'moon',
     category: 'wellness',
   },
   {
     id: 'stress_management',
     title: 'Stress Relief',
     description: 'Manage stress and anxiety',
-    icon: 'self-improvement',
+    icon: 'leaf',
     category: 'mental',
   },
   {
@@ -90,28 +91,62 @@ const HEALTH_GOALS: HealthGoal[] = [
     id: 'bone_health',
     title: 'Bone Health',
     description: 'Strengthen bones and joints',
-    icon: 'accessibility',
+    icon: 'body',
     category: 'wellness',
   },
   {
     id: 'skin_health',
     title: 'Skin Health',
     description: 'Improve skin appearance and health',
-    icon: 'face',
+    icon: 'sparkles',
     category: 'wellness',
   },
   {
     id: 'athletic_performance',
     title: 'Athletic Performance',
     description: 'Enhance sports and exercise performance',
-    icon: 'sports',
+    icon: 'trophy',
     category: 'fitness',
   },
 ];
 
-export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({ navigation }) => {
+export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
+  navigation,
+}) => {
   const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
   const maxGoals = 3;
+
+  // 🔄 Mark step as complete in HealthProfileSetupScreen
+  const markStepComplete = async (stepId: string) => {
+    try {
+      const savedProgress = await AsyncStorage.getItem(
+        'health_profile_setup_progress'
+      );
+      if (savedProgress) {
+        const { steps } = JSON.parse(savedProgress);
+        const updatedSteps = steps.map(
+          (step: { id: string; completed: boolean }) =>
+            step.id === stepId ? { ...step, completed: true } : step
+        );
+
+        // Advance to next step
+        const completedStepIndex = steps.findIndex(
+          (step: { id: string }) => step.id === stepId
+        );
+        const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
+
+        await AsyncStorage.setItem(
+          'health_profile_setup_progress',
+          JSON.stringify({
+            currentStep: nextStep,
+            steps: updatedSteps,
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error marking step complete:', error);
+    }
+  };
 
   const handleGoalToggle = (goalId: string) => {
     setSelectedGoals(prev => {
@@ -129,41 +164,48 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({ navigation
     });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (selectedGoals.length === 0) {
-      Alert.alert('No Goals Selected', 'Please select at least one health goal.');
+      Alert.alert(
+        'No Goals Selected',
+        'Please select at least one health goal.'
+      );
       return;
     }
 
-    // TODO: Save to profile service
-    console.log('Saving health goals:', selectedGoals);
-    
-    Alert.alert(
-      'Goals Saved!',
-      'Your health goals have been saved successfully.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+    try {
+      // TODO: Save to profile service
+      console.log('Saving health goals:', selectedGoals);
+
+      // Mark health goals step as complete and advance to next step
+      await markStepComplete('health_goals');
+
+      // No success popup - user continues to next step seamlessly
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error saving health goals:', error);
+      Alert.alert('Error', 'Failed to save health goals. Please try again.');
+    }
   };
 
   const renderGoalCard = (goal: HealthGoal) => {
     const isSelected = selectedGoals.includes(goal.id);
-    
+
     return (
       <TouchableOpacity
         key={goal.id}
-        style={[
-          styles.goalCard,
-          isSelected && styles.selectedGoalCard,
-        ]}
+        style={[styles.goalCard, isSelected && styles.selectedGoalCard]}
         onPress={() => handleGoalToggle(goal.id)}
         activeOpacity={0.7}
       >
         <View style={styles.goalHeader}>
-          <View style={[
-            styles.goalIconContainer,
-            isSelected && styles.selectedIconContainer,
-          ]}>
-            <MaterialIcons
+          <View
+            style={[
+              styles.goalIconContainer,
+              isSelected && styles.selectedIconContainer,
+            ]}
+          >
+            <Ionicons
               name={goal.icon}
               size={24}
               color={isSelected ? COLORS.white : COLORS.primary}
@@ -175,16 +217,17 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({ navigation
             </View>
           )}
         </View>
-        <Text style={[
-          styles.goalTitle,
-          isSelected && styles.selectedGoalTitle,
-        ]}>
+        <Text
+          style={[styles.goalTitle, isSelected && styles.selectedGoalTitle]}
+        >
           {goal.title}
         </Text>
-        <Text style={[
-          styles.goalDescription,
-          isSelected && styles.selectedGoalDescription,
-        ]}>
+        <Text
+          style={[
+            styles.goalDescription,
+            isSelected && styles.selectedGoalDescription,
+          ]}
+        >
           {goal.description}
         </Text>
       </TouchableOpacity>
@@ -210,10 +253,11 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({ navigation
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <MaterialIcons name="flag" size={32} color={COLORS.primary} />
+          <Ionicons name="flag" size={32} color={COLORS.primary} />
           <Text style={styles.instructionsTitle}>Choose Your Goals</Text>
           <Text style={styles.instructionsText}>
-            Select up to {maxGoals} health goals to get personalized supplement recommendations.
+            Select up to {maxGoals} health goals to get personalized supplement
+            recommendations.
           </Text>
           <Text style={styles.selectedCount}>
             {selectedGoals.length} of {maxGoals} selected

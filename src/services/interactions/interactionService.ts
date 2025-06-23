@@ -1,4 +1,6 @@
 // services/interaction/interactionService.ts
+// Enhanced Interaction Service with backward compatibility
+
 import { CRITICAL_INTERACTIONS, NUTRIENT_LIMITS } from '../../constants';
 import { analysisRateLimiter } from '../../utils/rateLimiting';
 import { sanitizeApiResponse } from '../../utils/sanitization';
@@ -9,10 +11,104 @@ import type {
   InteractionDetail,
   RiskLevel,
   StackInteractionResult,
-  NutrientWarning, // Import NutrientWarning type
+  NutrientWarning,
 } from '../../types';
+import type { HealthProfile } from '../../hooks/useHealthProfile';
+
+// Import enhanced interaction system
+import {
+  InteractionEngine,
+  InteractionEngineFactory,
+} from './core/InteractionEngine';
+import { SupplementSupplementChecker } from './checkers/SupplementSupplementChecker';
+import type {
+  InteractionCheckResult,
+  InteractionCheckConfig,
+  SubstanceContext,
+  UserInteractionContext,
+  DetectedInteraction,
+  InteractionSeverity,
+} from './types';
 
 export class InteractionService {
+  private enhancedEngine: InteractionEngine;
+  private enhancedInitialized: boolean = false;
+
+  constructor() {
+    // Initialize enhanced interaction engine
+    this.enhancedEngine = InteractionEngineFactory.createDefault();
+    this.initializeEnhancedEngine();
+  }
+
+  /**
+   * Initialize the enhanced interaction engine
+   */
+  private async initializeEnhancedEngine(): Promise<void> {
+    if (this.enhancedInitialized) return;
+
+    try {
+      // Register supplement-supplement checker
+      const supplementChecker = new SupplementSupplementChecker();
+      this.enhancedEngine.registerChecker(supplementChecker);
+
+      this.enhancedInitialized = true;
+      console.log('✅ Enhanced interaction engine initialized');
+    } catch (error) {
+      console.error(
+        '❌ Failed to initialize enhanced interaction engine:',
+        error
+      );
+    }
+  }
+
+  /**
+   * Enhanced interaction analysis with comprehensive checking
+   */
+  async analyzeProductWithStackEnhanced(
+    product: Product,
+    userStack: UserStack[],
+    healthProfile?: HealthProfile,
+    userId?: string
+  ): Promise<{
+    legacy: StackInteractionResult;
+    enhanced: InteractionCheckResult;
+    combined: StackInteractionResult;
+  }> {
+    // Run both legacy and enhanced analysis
+    const legacyResult = await this.analyzeProductWithStack(
+      product,
+      userStack,
+      healthProfile,
+      userId
+    );
+
+    let enhancedResult: InteractionCheckResult;
+    try {
+      await this.initializeEnhancedEngine();
+
+      // Convert to enhanced format
+      const substances = this.convertToSubstanceContexts(product, userStack);
+      const userContext = this.convertHealthProfileToUserContext(healthProfile);
+
+      enhancedResult = await this.enhancedEngine.checkInteractions(
+        substances,
+        userContext
+      );
+    } catch (error) {
+      console.error('Enhanced analysis failed, using legacy only:', error);
+      enhancedResult = this.createFallbackEnhancedResult();
+    }
+
+    // Combine results for best of both worlds
+    const combinedResult = this.combineResults(legacyResult, enhancedResult);
+
+    return {
+      legacy: legacyResult,
+      enhanced: enhancedResult,
+      combined: combinedResult,
+    };
+  }
+
   // Canonicalize interactions to prevent duplicates (A+B = B+A)
   private canonicalizeInteraction(item1: string, item2: string) {
     return item1 < item2
@@ -329,6 +425,206 @@ export class InteractionService {
       undefined,
       userId
     );
+  }
+
+  // Enhanced integration helper methods
+
+  /**
+   * Convert product and stack to substance contexts for enhanced analysis
+   */
+  private convertToSubstanceContexts(
+    product: Product,
+    userStack: UserStack[]
+  ): SubstanceContext[] {
+    const substances: SubstanceContext[] = [];
+
+    // Add product ingredients
+    if (product.ingredients) {
+      for (const ingredient of product.ingredients) {
+        substances.push({
+          name: ingredient.name,
+          dosage: {
+            amount: parseFloat(ingredient.amount?.toString() || '0') || 0,
+            unit: ingredient.unit || 'mg',
+            frequency: 'daily',
+          },
+          source: 'new_product',
+        });
+      }
+    }
+
+    // Add stack items
+    for (const item of userStack) {
+      // Extract dosage from string format
+      const dosageMatch = item.dosage?.match(/(\d+(?:\.\d+)?)\s*(\w+)/);
+      const amount = dosageMatch ? parseFloat(dosageMatch[1]) : 0;
+      const unit = dosageMatch ? dosageMatch[2] : 'mg';
+
+      substances.push({
+        name: item.name,
+        dosage: {
+          amount,
+          unit,
+          frequency: item.frequency || 'daily',
+        },
+        source: 'stack',
+      });
+    }
+
+    return substances;
+  }
+
+  /**
+   * Convert health profile to user context
+   */
+  private convertHealthProfileToUserContext(
+    healthProfile?: HealthProfile
+  ): UserInteractionContext | undefined {
+    if (!healthProfile) return undefined;
+
+    return {
+      demographics: healthProfile.demographics
+        ? {
+            ageRange: healthProfile.demographics.ageRange,
+            biologicalSex: healthProfile.demographics.biologicalSex,
+            pregnancyStatus: healthProfile.demographics.pregnancyStatus,
+          }
+        : undefined,
+      healthConditions: healthProfile.conditions?.conditions || [],
+      allergies: healthProfile.allergies?.substances || [],
+      medications: [], // Will be populated when medication tracking is added
+      healthGoals: healthProfile.goals
+        ? [
+            healthProfile.goals.primary,
+            ...(healthProfile.goals.secondary || []),
+          ].filter(Boolean)
+        : [],
+    };
+  }
+
+  /**
+   * Create fallback enhanced result when enhanced analysis fails
+   */
+  private createFallbackEnhancedResult(): InteractionCheckResult {
+    return {
+      hasInteractions: false,
+      interactions: [],
+      overallRiskLevel: 'LOW',
+      summary: {
+        criticalCount: 0,
+        highCount: 0,
+        moderateCount: 0,
+        lowCount: 0,
+      },
+      recommendations: {
+        immediate: ['Enhanced analysis temporarily unavailable'],
+        timing: [],
+        monitoring: ['Monitor for any unusual effects'],
+        alternatives: [],
+      },
+    };
+  }
+
+  /**
+   * Combine legacy and enhanced results for best coverage
+   */
+  private combineResults(
+    legacy: StackInteractionResult,
+    enhanced: InteractionCheckResult
+  ): StackInteractionResult {
+    // Start with legacy result as base
+    const combined: StackInteractionResult = { ...legacy };
+
+    // Enhance with enhanced analysis insights
+    if (enhanced.hasInteractions) {
+      // Convert enhanced interactions to legacy format and merge
+      const enhancedInteractions: InteractionDetail[] =
+        enhanced.interactions.map(interaction => ({
+          type: this.mapInteractionTypeToLegacy(interaction.type),
+          severity: this.mapSeverityToLegacy(interaction.severity),
+          message: interaction.description,
+          mechanism: interaction.mechanism,
+          evidenceSources: [
+            {
+              badge: '🔬',
+              text: `Evidence Level ${interaction.evidence.level}`,
+            },
+          ],
+          recommendation: interaction.recommendations.spacing
+            ? `Space doses by ${interaction.recommendations.spacing.minimumHours}+ hours`
+            : 'Monitor for effects',
+        }));
+
+      // Merge interactions, avoiding duplicates
+      const existingMessages = new Set(
+        combined.interactions.map(i => i.message)
+      );
+      const newInteractions = enhancedInteractions.filter(
+        i => !existingMessages.has(i.message)
+      );
+
+      combined.interactions.push(...newInteractions);
+
+      // Update overall risk level to highest
+      const enhancedRisk = this.mapSeverityToLegacy(enhanced.overallRiskLevel);
+      combined.overallRiskLevel = this.escalateRisk(
+        combined.overallRiskLevel,
+        enhancedRisk
+      );
+      combined.overallSafe =
+        combined.overallRiskLevel === 'NONE' ||
+        combined.overallRiskLevel === 'LOW';
+    }
+
+    return combined;
+  }
+
+  /**
+   * Map enhanced interaction types to legacy format
+   */
+  private mapInteractionTypeToLegacy(type: string): string {
+    switch (type) {
+      case 'supplement-supplement':
+        return 'Supplement-Supplement';
+      case 'supplement-medication':
+        return 'Drug-Supplement';
+      case 'supplement-condition':
+        return 'Supplement-Condition';
+      default:
+        return 'Unknown';
+    }
+  }
+
+  /**
+   * Map enhanced severity to legacy risk levels
+   */
+  private mapSeverityToLegacy(severity: InteractionSeverity): RiskLevel {
+    switch (severity) {
+      case 'CRITICAL':
+        return 'CRITICAL';
+      case 'HIGH':
+        return 'HIGH';
+      case 'MODERATE':
+        return 'MODERATE';
+      case 'LOW':
+        return 'LOW';
+      default:
+        return 'NONE';
+    }
+  }
+
+  /**
+   * Get enhanced interaction metrics
+   */
+  getEnhancedMetrics() {
+    return this.enhancedEngine.getMetrics();
+  }
+
+  /**
+   * Check if enhanced analysis is available
+   */
+  isEnhancedAnalysisAvailable(): boolean {
+    return this.enhancedInitialized;
   }
 }
 

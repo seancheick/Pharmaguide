@@ -95,19 +95,37 @@ export const useStackAnalysis = ({
       }
 
       const productsForAnalysis: Product[] = stack.map(mapUserStackToProduct);
+
+      // Remove duplicates based on name to prevent self-interaction analysis
+      const uniqueProducts = productsForAnalysis.filter(
+        (product, index, array) =>
+          array.findIndex(
+            p => p.name.toLowerCase() === product.name.toLowerCase()
+          ) === index
+      );
+
       const allInteractions: StackInteractionResult['interactions'] = [];
       const allNutrientWarnings: StackInteractionResult['nutrientWarnings'] =
         [];
       let overallHighestRisk: RiskLevel = 'NONE';
       let overallSafe = true;
 
-      // Analyze pairwise interactions
-      for (let i = 0; i < productsForAnalysis.length; i++) {
-        for (let j = i + 1; j < productsForAnalysis.length; j++) {
+      // Analyze pairwise interactions using unique products only
+      for (let i = 0; i < uniqueProducts.length; i++) {
+        for (let j = i + 1; j < uniqueProducts.length; j++) {
+          // Additional safety check - skip if it's the same product
+          if (
+            uniqueProducts[i].id === uniqueProducts[j].id ||
+            uniqueProducts[i].name.toLowerCase() ===
+              uniqueProducts[j].name.toLowerCase()
+          ) {
+            continue;
+          }
+
           try {
             const result = await interactionService.checkInteraction(
-              productsForAnalysis[i],
-              productsForAnalysis[j],
+              uniqueProducts[i],
+              uniqueProducts[j],
               user?.id
             );
 
@@ -124,10 +142,23 @@ export const useStackAnalysis = ({
             );
             if (!result.overallSafe) overallSafe = false;
           } catch (error) {
-            console.warn(
-              `Failed to analyze interaction between ${productsForAnalysis[i].name} and ${productsForAnalysis[j].name}:`,
-              error
-            );
+            // Handle rate limit errors gracefully - don't spam the console
+            if (
+              error instanceof Error &&
+              error.message.includes('Rate limit exceeded')
+            ) {
+              console.warn(
+                'Rate limit exceeded for interaction analysis - skipping remaining checks'
+              );
+              // Break out of both loops to prevent further rate limit hits
+              i = uniqueProducts.length;
+              break;
+            } else {
+              console.warn(
+                `Failed to analyze interaction between ${uniqueProducts[i].name} and ${uniqueProducts[j].name}:`,
+                error
+              );
+            }
           }
         }
       }

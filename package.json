@@ -34,6 +34,7 @@
     "@react-navigation/stack": "^7.3.3",
     "@reduxjs/toolkit": "^2.8.2",
     "@supabase/supabase-js": "^2.50.0",
+    "dotenv": "^16.5.0",
     "expo": "~53.0.10",
     "expo-barcode-scanner": "^13.0.1",
     "expo-blur": "~14.1.5",
@@ -45,6 +46,8 @@
     "expo-linear-gradient": "~14.1.5",
     "expo-notifications": "^0.31.3",
     "expo-secure-store": "~14.2.3",
+    "expo-sqlite": "~15.2.12",
+    "expo-random": "~14.0.1",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-error-boundary": "^6.0.0",
@@ -87,5 +90,6 @@
     "ts-jest": "^29.4.0",
     "typescript": "~5.8.3"
   },
-  "private": true
+  "private": true,
+  "type": "module"
 }

@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import type { SearchScreenProps } from '../../types/navigation';
 import {
   ProductSearchBar,
   SearchResults,
@@ -39,8 +40,8 @@ interface RouteParams {
 }
 
 export const SearchScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const route = useRoute();
+  const navigation = useNavigation<SearchScreenProps['navigation']>();
+  const route = useRoute<SearchScreenProps['route']>();
   const { stack } = useStackStore();
   const { initialQuery } = (route.params as RouteParams) || {};
 
@@ -125,15 +126,14 @@ export const SearchScreen: React.FC = () => {
         }
 
         // Navigate to product analysis results (same as scan flow)
-        navigation.navigate(
-          'ProductAnalysisResults' as never,
-          {
+        navigation.navigate('ProductAnalysisResults', {
+          productData: {
             product: analysisResult.product,
             analysis: analysisResult.analysis,
             onClose: () => navigation.goBack(),
             onScanAnother: () => navigation.goBack(),
-          } as never
-        );
+          },
+        });
       } catch (error) {
         console.error('Failed to analyze selected product:', error);
         Alert.alert(

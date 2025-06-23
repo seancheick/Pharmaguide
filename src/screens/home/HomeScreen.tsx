@@ -12,15 +12,17 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
+import type { HomeScreenProps } from '../../types/navigation';
 import { useAuth } from '../../hooks/useAuth';
 import { useHomeData } from '../../hooks/useHomeData';
 import { useStackStore } from '../../stores/stackStore';
+import { useStackHealth } from '../../hooks/useStackHealth';
 import {
   HomeHeader,
-  StatsDashboard,
+  UnifiedGamificationCard,
   RecentScansCarousel,
-  QuickActions,
+  DailyTips,
 } from '../../components/home';
 import { ProductSearchBar } from '../../components/search';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
@@ -28,7 +30,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 interface RecentScan {
   id: string;
   name: string;
-  brand: string;
+  brand?: string;
   imageUrl?: string;
   score: number;
   hasInteraction: boolean;
@@ -36,26 +38,25 @@ interface RecentScan {
   evidence?: 'A' | 'B' | 'C' | 'D';
 }
 
-const HomeScreenComponent = React.memo(() => {
-  const navigation = useNavigation();
+const HomeScreenComponent = React.memo(function HomeScreenComponent() {
+  const navigation = useNavigation<HomeScreenProps['navigation']>();
   const { user, loading: authLoading } = useAuth();
-  const { stack } = useStackStore();
-  const {
-    recentScans,
-    gameStats,
-    loading,
-    refreshing,
-    refreshData,
-    addRecentScan,
-  } = useHomeData();
+
+  // Safely get stack data with fallbacks
+  const stackStore = useStackStore();
+  const stack = stackStore?.stack || [];
+
+  // Only use stack health if stack store is available
+  const { analysis: stackAnalysis } = useStackHealth();
+
+  const { recentScans, gameStats, loading, refreshing, refreshData } =
+    useHomeData();
 
   // UI state
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   // Navigation handlers
-  const handleScanProduct = () => navigation.navigate('Scan' as never);
-  const handleAIConsult = () => navigation.navigate('AI' as never);
-  const handleStackAnalysis = () => navigation.navigate('Stack' as never);
+  const handleScanProduct = () => navigation.navigate('Scan');
   const handleNotificationPress = () => {
     // TODO: Implement notifications
     console.log('Notifications pressed');
@@ -67,13 +68,13 @@ const HomeScreenComponent = React.memo(() => {
     // TODO: Navigate to scan details
     console.log('Scan pressed:', scan.id);
   };
-  const handleHelpfulClick = (supplement: any, isHelpful: boolean) => {
+  const handleHelpfulClick = (supplement: RecentScan, isHelpful: boolean) => {
     // TODO: Implement helpful feedback
     console.log('Helpful feedback:', supplement.id, isHelpful);
   };
   const handleSearchPress = (query: string) => {
     console.log('Search pressed:', query);
-    navigation.navigate('Search' as never, { initialQuery: query } as never);
+    navigation.navigate('Search', { initialQuery: query });
   };
 
   // Show loading screen
@@ -98,7 +99,7 @@ const HomeScreenComponent = React.memo(() => {
       >
         {/* Header */}
         <HomeHeader
-          userName={user?.profile?.firstName}
+          userName={user?.profile?.firstName || undefined}
           onNotificationPress={handleNotificationPress}
           hasUnreadNotifications={false}
         />
@@ -138,20 +139,13 @@ const HomeScreenComponent = React.memo(() => {
           </TouchableOpacity>
         )}
 
-        {/* Stats Dashboard */}
-        <StatsDashboard
+        {/* Unified Gamification Card */}
+        <UnifiedGamificationCard
           gameStats={gameStats}
+          stack={stack}
+          stackAnalysis={stackAnalysis}
           onUpgradePress={handleUpgradePress}
           showUpgradePrompt={user?.is_anonymous}
-        />
-
-        {/* Quick Actions */}
-        <QuickActions
-          onScanPress={handleScanProduct}
-          onAIChatPress={handleAIConsult}
-          onStackPress={handleStackAnalysis}
-          onSearchPress={() => navigation.navigate('Search' as never)}
-          stackItemCount={stack.length}
         />
 
         {/* Recent Scans Carousel */}
@@ -162,6 +156,9 @@ const HomeScreenComponent = React.memo(() => {
           onScanAnother={handleScanProduct}
           onHelpfulClick={handleHelpfulClick}
         />
+
+        {/* Daily Tips */}
+        <DailyTips />
       </ScrollView>
 
       {/* Upgrade Modal */}
@@ -206,7 +203,7 @@ const HomeScreenComponent = React.memo(() => {
                 style={styles.modalPrimaryButton}
                 onPress={() => {
                   setShowUpgradePrompt(false);
-                  navigation.reset({
+                  navigation.getParent()?.reset({
                     index: 0,
                     routes: [{ name: 'Welcome' }],
                   });

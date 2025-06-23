@@ -5,13 +5,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   Switch,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { CustomHeader } from '../../components/common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { SettingsScreenProps } from '../../types/navigation';
 
@@ -27,7 +27,9 @@ interface SettingItem {
   destructive?: boolean;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  navigation,
+}) => {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
@@ -150,19 +152,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const renderSettingItem = (item: SettingItem) => (
     <TouchableOpacity
       key={item.id}
-      style={[
-        styles.settingItem,
-        item.destructive && styles.destructiveItem,
-      ]}
+      style={[styles.settingItem, item.destructive && styles.destructiveItem]}
       onPress={item.onPress}
       disabled={item.type === 'toggle'}
       activeOpacity={0.7}
     >
       <View style={styles.settingContent}>
-        <View style={[
-          styles.settingIconContainer,
-          item.destructive && styles.destructiveIconContainer,
-        ]}>
+        <View
+          style={[
+            styles.settingIconContainer,
+            item.destructive && styles.destructiveIconContainer,
+          ]}
+        >
           <Ionicons
             name={item.icon}
             size={20}
@@ -170,18 +171,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           />
         </View>
         <View style={styles.settingInfo}>
-          <Text style={[
-            styles.settingTitle,
-            item.destructive && styles.destructiveTitle,
-          ]}>
+          <Text
+            style={[
+              styles.settingTitle,
+              item.destructive && styles.destructiveTitle,
+            ]}
+          >
             {item.title}
           </Text>
-          <Text style={styles.settingDescription}>
-            {item.description}
-          </Text>
+          <Text style={styles.settingDescription}>{item.description}</Text>
         </View>
       </View>
-      
+
       {item.type === 'toggle' && (
         <Switch
           value={item.value}
@@ -190,7 +191,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           thumbColor={item.value ? COLORS.primary : COLORS.gray400}
         />
       )}
-      
+
       {item.type === 'navigation' && (
         <Ionicons
           name="chevron-forward"
@@ -204,30 +205,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
   const renderSection = (title: string, items: SettingItem[]) => (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.sectionContent}>
-        {items.map(renderSettingItem)}
-      </View>
+      <View style={styles.sectionContent}>{items.map(renderSettingItem)}</View>
     </View>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Settings</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <View style={styles.container}>
+      <CustomHeader title="Settings" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* App Info */}
         <View style={styles.appInfo}>
-          <MaterialIcons name="settings" size={40} color={COLORS.primary} />
+          <Ionicons name="settings" size={40} color={COLORS.primary} />
           <Text style={styles.appInfoTitle}>App Settings</Text>
           <Text style={styles.appInfoSubtitle}>
             Customize your Pharmaguide experience
@@ -248,7 +237,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ navigation }) =>
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -256,26 +245,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-  },
-  backButton: {
-    padding: SPACING.sm,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.textPrimary,
-  },
-  placeholder: {
-    width: 40,
   },
   content: {
     flex: 1,

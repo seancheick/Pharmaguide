@@ -5,13 +5,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   ScrollView,
   Linking,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { CustomHeader } from '../../components/common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { AboutScreenProps } from '../../types/navigation';
 
@@ -38,7 +38,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
       linkedin: 'https://linkedin.com/company/pharmaguide',
       github: 'https://github.com/pharmaguide',
     };
-    
+
     const url = urls[platform as keyof typeof urls];
     if (url) {
       Linking.openURL(url).catch(() => {
@@ -97,7 +97,8 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
     {
       icon: 'scan' as keyof typeof Ionicons.glyphMap,
       title: 'Smart Scanning',
-      description: 'Barcode and OCR technology for instant product identification',
+      description:
+        'Barcode and OCR technology for instant product identification',
     },
     {
       icon: 'analytics' as keyof typeof Ionicons.glyphMap,
@@ -125,11 +126,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
     >
       <View style={styles.aboutHeader}>
         <View style={styles.aboutIconContainer}>
-          <Ionicons
-            name={item.icon}
-            size={24}
-            color={COLORS.primary}
-          />
+          <Ionicons name={item.icon} size={24} color={COLORS.primary} />
         </View>
         <View style={styles.aboutInfo}>
           <View style={styles.aboutTitleRow}>
@@ -149,7 +146,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
     </TouchableOpacity>
   );
 
-  const renderFeature = (feature: typeof appFeatures[0], index: number) => (
+  const renderFeature = (feature: (typeof appFeatures)[0], index: number) => (
     <View key={index} style={styles.feature}>
       <View style={styles.featureIcon}>
         <Ionicons name={feature.icon} size={20} color={COLORS.primary} />
@@ -162,29 +159,29 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>About</Text>
-        <TouchableOpacity onPress={handleWebsite} style={styles.websiteButton}>
-          <Ionicons name="globe" size={24} color={COLORS.primary} />
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <CustomHeader
+        title="About"
+        rightElement={
+          <TouchableOpacity
+            onPress={handleWebsite}
+            style={styles.websiteButton}
+          >
+            <Ionicons name="globe" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* App Hero */}
         <View style={styles.hero}>
           <View style={styles.appIcon}>
-            <MaterialIcons name="health-and-safety" size={48} color={COLORS.white} />
+            <Ionicons name="shield-checkmark" size={48} color={COLORS.white} />
           </View>
           <Text style={styles.appName}>Pharmaguide</Text>
-          <Text style={styles.appTagline}>Your trusted supplement safety companion</Text>
+          <Text style={styles.appTagline}>
+            Your trusted supplement safety companion
+          </Text>
           <Text style={styles.appVersion}>Version 1.0.0 (Build 2024.1.0)</Text>
         </View>
 
@@ -192,8 +189,9 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
         <View style={styles.mission}>
           <Text style={styles.missionTitle}>Our Mission</Text>
           <Text style={styles.missionText}>
-            To empower individuals with accurate, science-based information about supplements 
-            and medications, helping them make informed decisions about their health and safety.
+            To empower individuals with accurate, science-based information
+            about supplements and medications, helping them make informed
+            decisions about their health and safety.
           </Text>
         </View>
 
@@ -265,7 +263,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ navigation }) => {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -273,23 +271,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-  },
-  backButton: {
-    padding: SPACING.sm,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.xl,
-    fontWeight: TYPOGRAPHY.weights.bold,
-    color: COLORS.textPrimary,
   },
   websiteButton: {
     padding: SPACING.sm,

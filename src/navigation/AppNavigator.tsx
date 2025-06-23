@@ -29,6 +29,22 @@ import {
   DataQualityScreen,
   SupportScreen,
   AboutScreen,
+  NotificationSettingsScreen,
+  PrivacySettingsScreen,
+  AccessibilitySettingsScreen,
+  ThemeSettingsScreen,
+  ReportIssueScreen,
+  MySubmissionsScreen,
+  ContributionsScreen,
+  HelpScreen,
+  FAQScreen,
+  DisclaimersScreen,
+  ContactSupportScreen,
+  AppInfoScreen,
+  TermsOfServiceScreen,
+  PrivacyPolicyScreen,
+  CreditsScreen,
+  LicensesScreen,
 } from '../screens/profile';
 import { COLORS } from '../constants';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
@@ -219,6 +235,134 @@ export const AppNavigator = () => {
             options={{
               headerShown: false,
               title: 'About',
+            }}
+          />
+          <Stack.Screen
+            name="NotificationSettingsScreen"
+            component={NotificationSettingsScreen}
+            options={{
+              headerShown: false,
+              title: 'Notification Settings',
+            }}
+          />
+          <Stack.Screen
+            name="PrivacySettingsScreen"
+            component={PrivacySettingsScreen}
+            options={{
+              headerShown: false,
+              title: 'Privacy Settings',
+            }}
+          />
+          <Stack.Screen
+            name="AccessibilitySettingsScreen"
+            component={AccessibilitySettingsScreen}
+            options={{
+              headerShown: false,
+              title: 'Accessibility Settings',
+            }}
+          />
+          <Stack.Screen
+            name="ThemeSettingsScreen"
+            component={ThemeSettingsScreen}
+            options={{
+              headerShown: false,
+              title: 'Theme Settings',
+            }}
+          />
+          <Stack.Screen
+            name="ReportIssueScreen"
+            component={ReportIssueScreen}
+            options={{
+              headerShown: false,
+              title: 'Report Issue',
+            }}
+          />
+          <Stack.Screen
+            name="MySubmissionsScreen"
+            component={MySubmissionsScreen}
+            options={{
+              headerShown: false,
+              title: 'My Submissions',
+            }}
+          />
+          <Stack.Screen
+            name="ContributionsScreen"
+            component={ContributionsScreen}
+            options={{
+              headerShown: false,
+              title: 'My Contributions',
+            }}
+          />
+          <Stack.Screen
+            name="HelpScreen"
+            component={HelpScreen}
+            options={{
+              headerShown: false,
+              title: 'Help & Support',
+            }}
+          />
+          <Stack.Screen
+            name="FAQScreen"
+            component={FAQScreen}
+            options={{
+              headerShown: false,
+              title: 'FAQ',
+            }}
+          />
+          <Stack.Screen
+            name="DisclaimersScreen"
+            component={DisclaimersScreen}
+            options={{
+              headerShown: false,
+              title: 'Disclaimers',
+            }}
+          />
+          <Stack.Screen
+            name="ContactSupportScreen"
+            component={ContactSupportScreen}
+            options={{
+              headerShown: false,
+              title: 'Contact Support',
+            }}
+          />
+          <Stack.Screen
+            name="AppInfoScreen"
+            component={AppInfoScreen}
+            options={{
+              headerShown: false,
+              title: 'App Information',
+            }}
+          />
+          <Stack.Screen
+            name="TermsOfServiceScreen"
+            component={TermsOfServiceScreen}
+            options={{
+              headerShown: false,
+              title: 'Terms of Service',
+            }}
+          />
+          <Stack.Screen
+            name="PrivacyPolicyScreen"
+            component={PrivacyPolicyScreen}
+            options={{
+              headerShown: false,
+              title: 'Privacy Policy',
+            }}
+          />
+          <Stack.Screen
+            name="CreditsScreen"
+            component={CreditsScreen}
+            options={{
+              headerShown: false,
+              title: 'Credits',
+            }}
+          />
+          <Stack.Screen
+            name="LicensesScreen"
+            component={LicensesScreen}
+            options={{
+              headerShown: false,
+              title: 'Licenses',
             }}
           />
           <Stack.Screen

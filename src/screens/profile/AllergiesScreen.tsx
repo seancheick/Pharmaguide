@@ -11,6 +11,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { AllergiesScreenProps } from '../../types/navigation';
@@ -74,7 +75,7 @@ const COMMON_ALLERGIES: Allergy[] = [
     severity: 'moderate',
     icon: 'egg',
   },
-  
+
   // Medication Allergies
   {
     id: 'penicillin',
@@ -97,7 +98,7 @@ const COMMON_ALLERGIES: Allergy[] = [
     severity: 'moderate',
     icon: 'medication',
   },
-  
+
   // Supplement Ingredients
   {
     id: 'gelatin',
@@ -120,7 +121,7 @@ const COMMON_ALLERGIES: Allergy[] = [
     severity: 'mild',
     icon: 'science',
   },
-  
+
   // Environmental
   {
     id: 'latex',
@@ -137,10 +138,44 @@ const SEVERITY_COLORS = {
   severe: '#D32F2F',
 };
 
-export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({ navigation }) => {
+export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
+  navigation,
+}) => {
   const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
   const [customAllergy, setCustomAllergy] = useState('');
   const [customAllergies, setCustomAllergies] = useState<string[]>([]);
+
+  // 🔄 Mark step as complete in HealthProfileSetupScreen
+  const markStepComplete = async (stepId: string) => {
+    try {
+      const savedProgress = await AsyncStorage.getItem(
+        'health_profile_setup_progress'
+      );
+      if (savedProgress) {
+        const { steps } = JSON.parse(savedProgress);
+        const updatedSteps = steps.map(
+          (step: { id: string; completed: boolean }) =>
+            step.id === stepId ? { ...step, completed: true } : step
+        );
+
+        // Advance to next step (this is the final step, so no advancement needed)
+        const completedStepIndex = steps.findIndex(
+          (step: { id: string }) => step.id === stepId
+        );
+        const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
+
+        await AsyncStorage.setItem(
+          'health_profile_setup_progress',
+          JSON.stringify({
+            currentStep: nextStep,
+            steps: updatedSteps,
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error marking step complete:', error);
+    }
+  };
 
   const handleAllergyToggle = (allergyId: string) => {
     setSelectedAllergies(prev => {
@@ -153,7 +188,10 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({ navigation }) 
   };
 
   const handleAddCustomAllergy = () => {
-    if (customAllergy.trim() && !customAllergies.includes(customAllergy.trim())) {
+    if (
+      customAllergy.trim() &&
+      !customAllergies.includes(customAllergy.trim())
+    ) {
       setCustomAllergies(prev => [...prev, customAllergy.trim()]);
       setCustomAllergy('');
     }
@@ -163,41 +201,42 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({ navigation }) 
     setCustomAllergies(prev => prev.filter(a => a !== allergy));
   };
 
-  const handleSave = () => {
-    const allAllergies = [
-      ...selectedAllergies,
-      ...customAllergies,
-    ];
+  const handleSave = async () => {
+    const allAllergies = [...selectedAllergies, ...customAllergies];
 
-    // TODO: Save to profile service
-    console.log('Saving allergies:', allAllergies);
-    
-    Alert.alert(
-      'Allergies Saved!',
-      'Your allergy information has been saved successfully.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+    try {
+      // TODO: Save to profile service
+      console.log('Saving allergies:', allAllergies);
+
+      // Mark allergies step as complete (final step)
+      await markStepComplete('allergies');
+
+      // No success popup here - the HealthProfileSetupScreen will show the final completion popup
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error saving allergies:', error);
+      Alert.alert('Error', 'Failed to save allergies. Please try again.');
+    }
   };
 
   const renderAllergyCard = (allergy: Allergy) => {
     const isSelected = selectedAllergies.includes(allergy.id);
     const severityColor = SEVERITY_COLORS[allergy.severity];
-    
+
     return (
       <TouchableOpacity
         key={allergy.id}
-        style={[
-          styles.allergyCard,
-          isSelected && styles.selectedAllergyCard,
-        ]}
+        style={[styles.allergyCard, isSelected && styles.selectedAllergyCard]}
         onPress={() => handleAllergyToggle(allergy.id)}
         activeOpacity={0.7}
       >
         <View style={styles.allergyHeader}>
-          <View style={[
-            styles.allergyIconContainer,
-            isSelected && styles.selectedIconContainer,
-          ]}>
+          <View
+            style={[
+              styles.allergyIconContainer,
+              isSelected && styles.selectedIconContainer,
+            ]}
+          >
             <MaterialIcons
               name={allergy.icon}
               size={20}
@@ -205,37 +244,51 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({ navigation }) 
             />
           </View>
           <View style={styles.allergyInfo}>
-            <Text style={[
-              styles.allergyName,
-              isSelected && styles.selectedAllergyName,
-            ]}>
+            <Text
+              style={[
+                styles.allergyName,
+                isSelected && styles.selectedAllergyName,
+              ]}
+            >
               {allergy.name}
             </Text>
             <View style={styles.severityContainer}>
-              <View style={[styles.severityDot, { backgroundColor: severityColor }]} />
-              <Text style={[
-                styles.severityText,
-                isSelected && styles.selectedSeverityText,
-              ]}>
-                {allergy.severity.charAt(0).toUpperCase() + allergy.severity.slice(1)}
+              <View
+                style={[styles.severityDot, { backgroundColor: severityColor }]}
+              />
+              <Text
+                style={[
+                  styles.severityText,
+                  isSelected && styles.selectedSeverityText,
+                ]}
+              >
+                {allergy.severity.charAt(0).toUpperCase() +
+                  allergy.severity.slice(1)}
               </Text>
             </View>
           </View>
           {isSelected && (
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+            <Ionicons
+              name="checkmark-circle"
+              size={20}
+              color={COLORS.success}
+            />
           )}
         </View>
       </TouchableOpacity>
     );
   };
 
-  const groupedAllergies = COMMON_ALLERGIES.reduce((acc, allergy) => {
-    if (!acc[allergy.category]) {
-      acc[allergy.category] = [];
-    }
-    acc[allergy.category].push(allergy);
-    return acc;
-  }, {} as Record<string, Allergy[]>);
+  const groupedAllergies = COMMON_ALLERGIES.reduce(
+    (acc, allergy) => {
+      if (!acc[allergy.category]) {
+        acc[allergy.category] = [];
+      }
+      acc[allergy.category].push(allergy);
+      return acc;
+    },
+    {} as Record<string, Allergy[]>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -256,10 +309,13 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({ navigation }) 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <MaterialIcons name="warning" size={32} color={COLORS.error} />
-          <Text style={styles.instructionsTitle}>Allergies & Sensitivities</Text>
+          <Ionicons name="warning" size={32} color={COLORS.error} />
+          <Text style={styles.instructionsTitle}>
+            Allergies & Sensitivities
+          </Text>
           <Text style={styles.instructionsText}>
-            Select any allergies or sensitivities you have. This is critical for your safety and helps us avoid recommending harmful supplements.
+            Select any allergies or sensitivities you have. This is critical for
+            your safety and helps us avoid recommending harmful supplements.
           </Text>
           <View style={styles.criticalNote}>
             <Ionicons name="alert-circle" size={16} color={COLORS.error} />

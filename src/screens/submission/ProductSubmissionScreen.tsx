@@ -14,6 +14,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { PhotoCaptureOverlay } from '../../components/ocr/PhotoCaptureOverlay';
+import { CustomHeader } from '../../components/common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 interface ProductSubmissionData {
@@ -47,7 +48,7 @@ export const ProductSubmissionScreen: React.FC = () => {
     directions: '',
     warnings: '',
   });
-  
+
   const [currentPhotoType, setCurrentPhotoType] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -81,22 +82,25 @@ export const ProductSubmissionScreen: React.FC = () => {
     }
 
     if (!submissionData.photos.front && !submissionData.photos.ingredients) {
-      Alert.alert('Missing Photos', 'Please capture at least the front label or ingredients list.');
+      Alert.alert(
+        'Missing Photos',
+        'Please capture at least the front label or ingredients list.'
+      );
       return;
     }
 
     try {
       setIsSubmitting(true);
-      
+
       // TODO: Implement actual submission to backend
       console.log('📤 Submitting product data:', submissionData);
-      
+
       // Simulate submission delay
       await new Promise(resolve => setTimeout(resolve, 2000));
-      
+
       Alert.alert(
         'Submission Successful! 🎉',
-        'Thank you for contributing to our database. Your submission will be reviewed and you\'ll earn points once approved!',
+        "Thank you for contributing to our database. Your submission will be reviewed and you'll earn points once approved!",
         [
           {
             text: 'Continue',
@@ -113,7 +117,11 @@ export const ProductSubmissionScreen: React.FC = () => {
   };
 
   const getPhotoStatus = (photoType: string) => {
-    return submissionData.photos[photoType as keyof typeof submissionData.photos] ? '✅' : '📷';
+    return submissionData.photos[
+      photoType as keyof typeof submissionData.photos
+    ]
+      ? '✅'
+      : '📷';
   };
 
   if (currentPhotoType) {
@@ -128,17 +136,12 @@ export const ProductSubmissionScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Submit Product</Text>
-          <View style={styles.placeholder} />
-        </View>
-
+    <View style={styles.container}>
+      <CustomHeader title="Submit Product" />
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Info Banner */}
         <View style={styles.infoBanner}>
           <MaterialIcons name="info" size={20} color={COLORS.info} />
@@ -150,13 +153,15 @@ export const ProductSubmissionScreen: React.FC = () => {
         {/* Basic Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Basic Information</Text>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Product Name *</Text>
             <TextInput
               style={styles.input}
               value={submissionData.productName}
-              onChangeText={(text) => setSubmissionData(prev => ({ ...prev, productName: text }))}
+              onChangeText={text =>
+                setSubmissionData(prev => ({ ...prev, productName: text }))
+              }
               placeholder="e.g., Vitamin D3 1000 IU"
               placeholderTextColor={COLORS.textSecondary}
             />
@@ -167,7 +172,9 @@ export const ProductSubmissionScreen: React.FC = () => {
             <TextInput
               style={styles.input}
               value={submissionData.brand}
-              onChangeText={(text) => setSubmissionData(prev => ({ ...prev, brand: text }))}
+              onChangeText={text =>
+                setSubmissionData(prev => ({ ...prev, brand: text }))
+              }
               placeholder="e.g., Nature Made"
               placeholderTextColor={COLORS.textSecondary}
             />
@@ -178,7 +185,9 @@ export const ProductSubmissionScreen: React.FC = () => {
             <TextInput
               style={styles.input}
               value={submissionData.barcode}
-              onChangeText={(text) => setSubmissionData(prev => ({ ...prev, barcode: text }))}
+              onChangeText={text =>
+                setSubmissionData(prev => ({ ...prev, barcode: text }))
+              }
               placeholder="e.g., 123456789012"
               placeholderTextColor={COLORS.textSecondary}
               keyboardType="numeric"
@@ -199,13 +208,15 @@ export const ProductSubmissionScreen: React.FC = () => {
               { key: 'back', label: 'Back Label', required: false },
               { key: 'ingredients', label: 'Ingredients', required: true },
               { key: 'nutrition', label: 'Nutrition Facts', required: false },
-            ].map((photo) => (
+            ].map(photo => (
               <TouchableOpacity
                 key={photo.key}
                 style={styles.photoButton}
                 onPress={() => handlePhotoCapture(photo.key)}
               >
-                <Text style={styles.photoIcon}>{getPhotoStatus(photo.key)}</Text>
+                <Text style={styles.photoIcon}>
+                  {getPhotoStatus(photo.key)}
+                </Text>
                 <Text style={styles.photoLabel}>{photo.label}</Text>
                 {photo.required && <Text style={styles.requiredMark}>*</Text>}
               </TouchableOpacity>
@@ -216,13 +227,18 @@ export const ProductSubmissionScreen: React.FC = () => {
         {/* Manual Information */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Additional Details</Text>
-          
+
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Ingredients (if photos unclear)</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
               value={submissionData.manualIngredients}
-              onChangeText={(text) => setSubmissionData(prev => ({ ...prev, manualIngredients: text }))}
+              onChangeText={text =>
+                setSubmissionData(prev => ({
+                  ...prev,
+                  manualIngredients: text,
+                }))
+              }
               placeholder="List ingredients and amounts..."
               placeholderTextColor={COLORS.textSecondary}
               multiline
@@ -236,7 +252,9 @@ export const ProductSubmissionScreen: React.FC = () => {
               <TextInput
                 style={styles.input}
                 value={submissionData.servingSize}
-                onChangeText={(text) => setSubmissionData(prev => ({ ...prev, servingSize: text }))}
+                onChangeText={text =>
+                  setSubmissionData(prev => ({ ...prev, servingSize: text }))
+                }
                 placeholder="e.g., 1 capsule"
                 placeholderTextColor={COLORS.textSecondary}
               />
@@ -247,7 +265,12 @@ export const ProductSubmissionScreen: React.FC = () => {
               <TextInput
                 style={styles.input}
                 value={submissionData.servingsPerContainer}
-                onChangeText={(text) => setSubmissionData(prev => ({ ...prev, servingsPerContainer: text }))}
+                onChangeText={text =>
+                  setSubmissionData(prev => ({
+                    ...prev,
+                    servingsPerContainer: text,
+                  }))
+                }
                 placeholder="e.g., 60"
                 placeholderTextColor={COLORS.textSecondary}
                 keyboardType="numeric"
@@ -283,7 +306,7 @@ export const ProductSubmissionScreen: React.FC = () => {
           </Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -294,23 +317,6 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.textPrimary,
-  },
-  placeholder: {
-    width: 24,
   },
   infoBanner: {
     flexDirection: 'row',

@@ -6,6 +6,8 @@ import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { performanceMonitor } from './src/services/performance/performanceMonitor';
 import { gamificationService } from './src/services/gamification/gamificationService';
+import { secureStorage } from './src/services/storage/secureStorage';
+import { networkService } from './src/services/network/networkService';
 // import { ErrorBoundary } from './src/components/common/ErrorBoundary';
 import * as FileSystem from 'expo-file-system';
 
@@ -35,6 +37,24 @@ export default function App() {
     // Start measuring app cold start time
     performanceMonitor.startMeasure('cold_start');
 
+    // Initialize core services
+    const initializeServices = async () => {
+      try {
+        console.log('🚀 Initializing core services...');
+
+        // Initialize network service first
+        await networkService.initialize();
+
+        // Initialize secure storage (HIPAA-compliant)
+        await secureStorage.initialize();
+
+        console.log('✅ Core services initialized successfully');
+      } catch (error) {
+        console.error('❌ Failed to initialize core services:', error);
+        // App can still function with limited capabilities
+      }
+    };
+
     // Ensure the @anonymous directory exists for storage
     const ensureDirectoryExists = async () => {
       const anonymousDir = `${FileSystem.documentDirectory}ExponentExperienceData/@anonymous`;
@@ -51,7 +71,13 @@ export default function App() {
       }
     };
 
-    ensureDirectoryExists();
+    // Initialize everything
+    const initialize = async () => {
+      await ensureDirectoryExists();
+      await initializeServices();
+    };
+
+    initialize();
   }, []);
 
   return (

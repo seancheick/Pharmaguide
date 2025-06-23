@@ -35,8 +35,16 @@ export const COLORS = {
   surface: '#FFFFFF',
   white: '#FFFFFF',
 
+  // Glass morphism colors
+  glass: 'rgba(255, 255, 255, 0.7)',
+  glassLight: 'rgba(255, 255, 255, 0.9)',
+  glassDark: 'rgba(0, 0, 0, 0.1)',
+  glassBlur: 'rgba(255, 255, 255, 0.25)',
+
   // Borders
   border: '#E5E7EB',
+  borderLight: 'rgba(229, 231, 235, 0.5)',
+  borderGlass: 'rgba(255, 255, 255, 0.2)',
 
   // Text
   textPrimary: '#111827',
@@ -47,12 +55,14 @@ export const COLORS = {
   // Interactive states
   hover: 'rgba(37, 99, 235, 0.1)',
   pressed: 'rgba(37, 99, 235, 0.2)',
-  disabled: '#E5E7EB', // A neutral disabled state
+  disabled: '#E5E7EB',
 
   // Shadows (using direct color values for consistency)
   shadowLight: 'rgba(0, 0, 0, 0.05)',
   shadowMedium: 'rgba(0, 0, 0, 0.1)',
   shadowDark: 'rgba(0, 0, 0, 0.2)',
+  shadowPrimary: 'rgba(37, 99, 235, 0.25)',
+  shadowGlow: 'rgba(37, 99, 235, 0.4)',
 };
 
 export const SPACING = {

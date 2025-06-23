@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { StackScreenProps } from '../../types/navigation';
 import { useStackStore } from '../../stores/stackStore';
 import { useStackAnalysis } from '../../hooks/useStackAnalysis';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
@@ -28,7 +29,7 @@ import {
 import type { UserStack } from '../../types';
 
 export function MyStackScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<StackScreenProps['navigation']>();
   const {
     stack,
     removeFromStack,
@@ -239,7 +240,7 @@ export function MyStackScreen() {
                 </Text>
                 <TouchableOpacity
                   style={styles.addButton}
-                  onPress={() => navigation.navigate('Scan' as never)}
+                  onPress={() => navigation.navigate('Scan')}
                 >
                   <Text style={styles.addButtonText}>
                     {stack.length === 0
@@ -273,7 +274,7 @@ export function MyStackScreen() {
       )}
 
       {/* Add Item FAB */}
-      <CustomFAB onPress={() => navigation.navigate('Scan' as never)} />
+      <CustomFAB onPress={() => navigation.navigate('Scan')} />
 
       {/* Item Detail Modal */}
       <StackItemDetailModal

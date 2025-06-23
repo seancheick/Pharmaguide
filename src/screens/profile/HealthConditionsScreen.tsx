@@ -11,6 +11,7 @@ import {
   Alert,
   TextInput,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { HealthConditionsScreenProps } from '../../types/navigation';
@@ -18,7 +19,13 @@ import { HealthConditionsScreenProps } from '../../types/navigation';
 interface HealthCondition {
   id: string;
   name: string;
-  category: 'cardiovascular' | 'metabolic' | 'digestive' | 'mental' | 'autoimmune' | 'other';
+  category:
+    | 'cardiovascular'
+    | 'metabolic'
+    | 'digestive'
+    | 'mental'
+    | 'autoimmune'
+    | 'other';
   icon: keyof typeof MaterialIcons.glyphMap;
   description?: string;
 }
@@ -110,10 +117,44 @@ const COMMON_CONDITIONS: HealthCondition[] = [
   },
 ];
 
-export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ navigation }) => {
+export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
+  navigation,
+}) => {
   const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
   const [customCondition, setCustomCondition] = useState('');
   const [customConditions, setCustomConditions] = useState<string[]>([]);
+
+  // 🔄 Mark step as complete in HealthProfileSetupScreen
+  const markStepComplete = async (stepId: string) => {
+    try {
+      const savedProgress = await AsyncStorage.getItem(
+        'health_profile_setup_progress'
+      );
+      if (savedProgress) {
+        const { steps } = JSON.parse(savedProgress);
+        const updatedSteps = steps.map(
+          (step: { id: string; completed: boolean }) =>
+            step.id === stepId ? { ...step, completed: true } : step
+        );
+
+        // Advance to next step
+        const completedStepIndex = steps.findIndex(
+          (step: { id: string }) => step.id === stepId
+        );
+        const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
+
+        await AsyncStorage.setItem(
+          'health_profile_setup_progress',
+          JSON.stringify({
+            currentStep: nextStep,
+            steps: updatedSteps,
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error marking step complete:', error);
+    }
+  };
 
   const handleConditionToggle = (conditionId: string) => {
     setSelectedConditions(prev => {
@@ -126,7 +167,10 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ 
   };
 
   const handleAddCustomCondition = () => {
-    if (customCondition.trim() && !customConditions.includes(customCondition.trim())) {
+    if (
+      customCondition.trim() &&
+      !customConditions.includes(customCondition.trim())
+    ) {
       setCustomConditions(prev => [...prev, customCondition.trim()]);
       setCustomCondition('');
     }
@@ -136,25 +180,30 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ 
     setCustomConditions(prev => prev.filter(c => c !== condition));
   };
 
-  const handleSave = () => {
-    const allConditions = [
-      ...selectedConditions,
-      ...customConditions,
-    ];
+  const handleSave = async () => {
+    const allConditions = [...selectedConditions, ...customConditions];
 
-    // TODO: Save to profile service
-    console.log('Saving health conditions:', allConditions);
-    
-    Alert.alert(
-      'Conditions Saved!',
-      'Your health conditions have been saved successfully.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }]
-    );
+    try {
+      // TODO: Save to profile service
+      console.log('Saving health conditions:', allConditions);
+
+      // Mark health conditions step as complete and advance to next step
+      await markStepComplete('health_conditions');
+
+      // No success popup - user continues to next step seamlessly
+      navigation.goBack();
+    } catch (error) {
+      console.error('Error saving health conditions:', error);
+      Alert.alert(
+        'Error',
+        'Failed to save health conditions. Please try again.'
+      );
+    }
   };
 
   const renderConditionCard = (condition: HealthCondition) => {
     const isSelected = selectedConditions.includes(condition.id);
-    
+
     return (
       <TouchableOpacity
         key={condition.id}
@@ -166,10 +215,12 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ 
         activeOpacity={0.7}
       >
         <View style={styles.conditionHeader}>
-          <View style={[
-            styles.conditionIconContainer,
-            isSelected && styles.selectedIconContainer,
-          ]}>
+          <View
+            style={[
+              styles.conditionIconContainer,
+              isSelected && styles.selectedIconContainer,
+            ]}
+          >
             <MaterialIcons
               name={condition.icon}
               size={20}
@@ -177,20 +228,28 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ 
             />
           </View>
           {isSelected && (
-            <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+            <Ionicons
+              name="checkmark-circle"
+              size={20}
+              color={COLORS.success}
+            />
           )}
         </View>
-        <Text style={[
-          styles.conditionName,
-          isSelected && styles.selectedConditionName,
-        ]}>
+        <Text
+          style={[
+            styles.conditionName,
+            isSelected && styles.selectedConditionName,
+          ]}
+        >
           {condition.name}
         </Text>
         {condition.description && (
-          <Text style={[
-            styles.conditionDescription,
-            isSelected && styles.selectedConditionDescription,
-          ]}>
+          <Text
+            style={[
+              styles.conditionDescription,
+              isSelected && styles.selectedConditionDescription,
+            ]}
+          >
             {condition.description}
           </Text>
         )}
@@ -217,13 +276,22 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({ 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <MaterialIcons name="health-and-safety" size={32} color={COLORS.primary} />
+          <MaterialIcons
+            name="health-and-safety"
+            size={32}
+            color={COLORS.primary}
+          />
           <Text style={styles.instructionsTitle}>Health Conditions</Text>
           <Text style={styles.instructionsText}>
-            Select any health conditions you have. This helps us provide safer supplement recommendations and identify potential interactions.
+            Select any health conditions you have. This helps us provide safer
+            supplement recommendations and identify potential interactions.
           </Text>
           <View style={styles.privacyNote}>
-            <Ionicons name="shield-checkmark" size={16} color={COLORS.success} />
+            <Ionicons
+              name="shield-checkmark"
+              size={16}
+              color={COLORS.success}
+            />
             <Text style={styles.privacyText}>
               Your health information is encrypted and private
             </Text>

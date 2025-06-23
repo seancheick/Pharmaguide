@@ -12,7 +12,7 @@ import {
   Alert,
   FlatList,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { Medication } from '../../types/healthProfile';
 import { MedicationsScreenProps } from '../../types/navigation';
@@ -311,7 +311,7 @@ export const MedicationsScreen: React.FC<MedicationsScreenProps> = ({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Info Banner */}
         <View style={styles.infoBanner}>
-          <MaterialIcons name="info" size={20} color={COLORS.info} />
+          <Ionicons name="information-circle" size={20} color={COLORS.info} />
           <Text style={styles.infoText}>
             Add your medications and supplements to check for interactions
             automatically.

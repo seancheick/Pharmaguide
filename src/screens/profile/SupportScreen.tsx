@@ -11,7 +11,7 @@ import {
   Linking,
   Alert,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { SupportScreenProps } from '../../types/navigation';
 
@@ -34,10 +34,10 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
     const email = 'support@pharmaguide.app';
     const subject = 'Support Request - Pharmaguide App';
     const body = 'Please describe your issue or question:\n\n';
-    
+
     const url = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    
-    Linking.canOpenURL(url).then((supported) => {
+
+    Linking.canOpenURL(url).then(supported => {
       if (supported) {
         Linking.openURL(url);
       } else {
@@ -52,8 +52,8 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
 
   const handleCallSupport = () => {
     const phoneNumber = 'tel:+1-800-PHARMA-1';
-    
-    Linking.canOpenURL(phoneNumber).then((supported) => {
+
+    Linking.canOpenURL(phoneNumber).then(supported => {
       if (supported) {
         Alert.alert(
           'Call Support',
@@ -122,19 +122,23 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
   const quickFAQs: FAQItem[] = [
     {
       question: 'How accurate is the supplement analysis?',
-      answer: 'Our analysis combines multiple data sources including clinical studies, FDA databases, and expert reviews. However, always consult healthcare professionals for medical advice.',
+      answer:
+        'Our analysis combines multiple data sources including clinical studies, FDA databases, and expert reviews. However, always consult healthcare professionals for medical advice.',
     },
     {
       question: 'Can I trust the interaction warnings?',
-      answer: 'Our interaction database is continuously updated with the latest research. However, this app is not a substitute for professional medical advice.',
+      answer:
+        'Our interaction database is continuously updated with the latest research. However, this app is not a substitute for professional medical advice.',
     },
     {
       question: 'How do I add medications to my stack?',
-      answer: 'Go to the Stack tab, tap the + button, and search for your medication or supplement. You can also scan barcodes for quick addition.',
+      answer:
+        'Go to the Stack tab, tap the + button, and search for your medication or supplement. You can also scan barcodes for quick addition.',
     },
     {
       question: 'Is my health data secure?',
-      answer: 'Yes, all health data is encrypted and stored securely. We never share personal health information with third parties without your explicit consent.',
+      answer:
+        'Yes, all health data is encrypted and stored securely. We never share personal health information with third parties without your explicit consent.',
     },
   ];
 
@@ -147,11 +151,7 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
     >
       <View style={styles.supportHeader}>
         <View style={styles.supportIconContainer}>
-          <Ionicons
-            name={item.icon}
-            size={24}
-            color={COLORS.primary}
-          />
+          <Ionicons name={item.icon} size={24} color={COLORS.primary} />
         </View>
         <View style={styles.supportInfo}>
           <View style={styles.supportTitleRow}>
@@ -189,7 +189,10 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
           <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Support</Text>
-        <TouchableOpacity onPress={handleEmailSupport} style={styles.emailButton}>
+        <TouchableOpacity
+          onPress={handleEmailSupport}
+          style={styles.emailButton}
+        >
           <Ionicons name="mail" size={24} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
@@ -197,7 +200,7 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
         <View style={styles.hero}>
-          <MaterialIcons name="support-agent" size={40} color={COLORS.primary} />
+          <Ionicons name="help-circle" size={40} color={COLORS.primary} />
           <Text style={styles.heroTitle}>How can we help?</Text>
           <Text style={styles.heroSubtitle}>
             Find answers, get support, and learn about our methodology
@@ -208,15 +211,24 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
         <View style={styles.quickContact}>
           <Text style={styles.sectionTitle}>Quick Contact</Text>
           <View style={styles.contactButtons}>
-            <TouchableOpacity style={styles.contactButton} onPress={handleEmailSupport}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={handleEmailSupport}
+            >
               <Ionicons name="mail" size={20} color={COLORS.primary} />
               <Text style={styles.contactButtonText}>Email</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.contactButton} onPress={handleCallSupport}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={handleCallSupport}
+            >
               <Ionicons name="call" size={20} color={COLORS.primary} />
               <Text style={styles.contactButtonText}>Call</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.contactButton} onPress={handleWebsiteHelp}>
+            <TouchableOpacity
+              style={styles.contactButton}
+              onPress={handleWebsiteHelp}
+            >
               <Ionicons name="globe" size={20} color={COLORS.primary} />
               <Text style={styles.contactButtonText}>Website</Text>
             </TouchableOpacity>
@@ -248,10 +260,11 @@ export const SupportScreen: React.FC<SupportScreenProps> = ({ navigation }) => {
 
         {/* Emergency Notice */}
         <View style={styles.emergencyNotice}>
-          <MaterialIcons name="emergency" size={20} color={COLORS.error} />
+          <Ionicons name="warning" size={20} color={COLORS.error} />
           <Text style={styles.emergencyText}>
-            For medical emergencies, call 911 or your local emergency services immediately. 
-            This app is not intended for emergency medical situations.
+            For medical emergencies, call 911 or your local emergency services
+            immediately. This app is not intended for emergency medical
+            situations.
           </Text>
         </View>
 

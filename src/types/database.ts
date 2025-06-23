@@ -50,13 +50,13 @@ export interface DatabaseUserProfile {
 export interface DatabaseUserPreferences {
   id: string;
   user_id: string;
-  ai_response_style: "concise" | "detailed" | "technical";
-  budget_range: "budget" | "mid" | "premium";
-  primary_focus: "safety" | "efficacy" | "value" | "naturalness";
+  ai_response_style: 'concise' | 'detailed' | 'technical';
+  budget_range: 'budget' | 'mid' | 'premium';
+  primary_focus: 'safety' | 'efficacy' | 'value' | 'naturalness';
   notifications: {
     push_enabled: boolean;
     email_enabled: boolean;
-    reminder_frequency: "daily" | "weekly" | "monthly";
+    reminder_frequency: 'daily' | 'weekly' | 'monthly';
   };
   created_at: string;
   updated_at: string;
@@ -108,7 +108,7 @@ export interface DatabaseUserStack {
   user_id: string;
   item_id: string | null;
   name: string | null;
-  type: "medication" | "supplement" | null;
+  type: 'medication' | 'supplement' | null;
   dosage: string | null;
   frequency: string | null;
   active: boolean;
@@ -124,12 +124,55 @@ export interface DatabaseInteraction {
   id: string;
   item1_id: string;
   item2_id: string;
-  severity: "LOW" | "MODERATE" | "HIGH" | "CRITICAL" | null;
+  severity: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL' | null;
   mechanism: string | null;
   evidence: string | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+}
+
+export interface CriticalInteractionRule {
+  id: string;
+  item1Type: string;
+  item1Identifier: string;
+  item2Type: string;
+  item2Identifier: string;
+  severity: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  mechanism: string;
+  clinicalSignificance: string;
+  recommendation: string;
+  contraindicated: boolean;
+  monitoringRequired: boolean;
+  source: 'FDA' | 'NIH' | 'PUBMED' | 'CLINICAL_STUDY' | 'MANUFACTURER' | 'AI';
+  evidenceQuality: 'A' | 'B' | 'C' | 'D' | 'EXPERT_OPINION';
+  sources: InteractionSource[];
+}
+
+export interface InteractionSource {
+  sourceType:
+    | 'FDA'
+    | 'NIH'
+    | 'PUBMED'
+    | 'CLINICAL_STUDY'
+    | 'MANUFACTURER'
+    | 'AI';
+  sourceName: string;
+  sourceUrl?: string;
+  confidenceScore?: number;
+}
+
+export interface NutrientLimit {
+  id: string;
+  nutrientName: string;
+  upperLimit: number;
+  unit: string;
+  ageGroup?: string;
+  gender?: string;
+  healthRisks?: string;
+  toxicitySymptoms?: string[];
+  source: string;
+  sourceUrl?: string;
 }
 
 export interface DatabaseAIResponseCache {
@@ -146,7 +189,7 @@ export interface DatabaseAIResponseCache {
 export interface DatabaseUserRole {
   id: string;
   user_id: string;
-  role: "patient" | "provider" | "admin" | "moderator";
+  role: 'patient' | 'provider' | 'admin' | 'moderator';
   granted_at: string;
   granted_by: string | null;
   expires_at: string | null;
@@ -159,7 +202,7 @@ export interface DatabaseProviderPatient {
   id: string;
   provider_id: string;
   patient_id: string;
-  status: "pending" | "active" | "revoked";
+  status: 'pending' | 'active' | 'revoked';
   shared_data: {
     stack: boolean;
     history: boolean;
@@ -236,13 +279,13 @@ export interface UserProfile {
 }
 
 export interface UserPreferences {
-  aiResponseStyle: "concise" | "detailed" | "technical";
-  budgetRange: "budget" | "mid" | "premium";
-  primaryFocus: "safety" | "efficacy" | "value" | "naturalness";
+  aiResponseStyle: 'concise' | 'detailed' | 'technical';
+  budgetRange: 'budget' | 'mid' | 'premium';
+  primaryFocus: 'safety' | 'efficacy' | 'value' | 'naturalness';
   notifications: {
     pushEnabled: boolean;
     emailEnabled: boolean;
-    reminderFrequency: "daily" | "weekly" | "monthly";
+    reminderFrequency: 'daily' | 'weekly' | 'monthly';
   };
 }
 
@@ -260,7 +303,7 @@ export interface UserStreaks {
 }
 
 export interface UserRole {
-  role: "patient" | "provider" | "admin" | "moderator";
+  role: 'patient' | 'provider' | 'admin' | 'moderator';
   grantedAt: string;
   expiresAt: string | null;
 }
@@ -289,7 +332,7 @@ export interface StackItem {
   id: string;
   itemId: string | null;
   name: string;
-  type: "medication" | "supplement";
+  type: 'medication' | 'supplement';
   dosage: string | null;
   frequency: string | null;
   active: boolean;
@@ -304,7 +347,7 @@ export interface Interaction {
   id: string;
   item1Id: string;
   item2Id: string;
-  severity: "LOW" | "MODERATE" | "HIGH" | "CRITICAL";
+  severity: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
   mechanism: string;
   evidence: string;
 }
@@ -313,7 +356,7 @@ export interface ScanResult {
   id: string;
   productId: string | null;
   product?: Product;
-  scanType: "barcode" | "ocr" | "voice" | "manual";
+  scanType: 'barcode' | 'ocr' | 'voice' | 'manual';
   analysisScore: number;
   scannedAt: string;
 }
@@ -321,33 +364,33 @@ export interface ScanResult {
 // ===== Supabase Table Names =====
 
 export const TABLES = {
-  USERS: "users",
-  PRODUCTS: "products",
-  USER_PROFILES: "user_profiles",
-  USER_PREFERENCES: "user_preferences",
-  USER_POINTS: "user_points",
-  USER_STREAKS: "user_streaks",
-  POINTS_HISTORY: "points_history",
-  SCAN_HISTORY: "scan_history",
-  USER_STACK: "user_stack",
-  INTERACTIONS: "interactions",
-  AI_RESPONSE_CACHE: "ai_response_cache",
-  USER_ROLES: "user_roles",
-  PROVIDER_PATIENTS: "provider_patients",
-  AUDIT_LOG: "audit_log",
+  USERS: 'users',
+  PRODUCTS: 'products',
+  USER_PROFILES: 'user_profiles',
+  USER_PREFERENCES: 'user_preferences',
+  USER_POINTS: 'user_points',
+  USER_STREAKS: 'user_streaks',
+  POINTS_HISTORY: 'points_history',
+  SCAN_HISTORY: 'scan_history',
+  USER_STACK: 'user_stack',
+  INTERACTIONS: 'interactions',
+  AI_RESPONSE_CACHE: 'ai_response_cache',
+  USER_ROLES: 'user_roles',
+  PROVIDER_PATIENTS: 'provider_patients',
+  AUDIT_LOG: 'audit_log',
 } as const;
 
 // ===== RPC Function Names =====
 
 export const RPC_FUNCTIONS = {
-  CREATE_USER_WITH_PROFILE: "create_user_with_profile",
-  INCREMENT_POINTS: "increment_points",
-  UPDATE_STREAK: "update_streak",
+  CREATE_USER_WITH_PROFILE: 'create_user_with_profile',
+  INCREMENT_POINTS: 'increment_points',
+  UPDATE_STREAK: 'update_streak',
 } as const;
 
 // ===== Storage Buckets =====
 
 export const STORAGE_BUCKETS = {
-  PRODUCT_IMAGES: "product-images",
-  USER_UPLOADS: "user-uploads",
+  PRODUCT_IMAGES: 'product-images',
+  USER_UPLOADS: 'user-uploads',
 } as const;

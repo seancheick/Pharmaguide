@@ -12,16 +12,28 @@ import {
   ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
-import { StackNavigationProp } from '@react-navigation/stack';
+import { Ionicons } from '@expo/vector-icons';
+// Remove AsyncStorage import - no longer needed for progress tracking
 import { useAuth } from '../../hooks/useAuth';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
-import { RootStackParamList } from '../../types/navigation';
+import {
+  PROFILE_SECTIONS,
+  MAIN_SECTIONS,
+  ProfileSectionGroup,
+} from '../../constants/profile';
+import type { ProfileScreenProps } from '../../types/navigation';
 
-type ProfileNavigationProp = StackNavigationProp<RootStackParamList>;
+// Remove locking mechanism - all sections should be freely accessible
 
 export const ProfileScreen = () => {
-  const navigation = useNavigation<ProfileNavigationProp>();
+  const navigation = useNavigation<ProfileScreenProps['navigation']>();
+
+  const navigateToScreen = (route: string) => {
+    // Navigate to the specified screen - all sections are freely accessible
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (navigation as any).navigate(route);
+  };
   const {
     user,
     signOut,
@@ -31,56 +43,21 @@ export const ProfileScreen = () => {
   } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  // 🎯 Mock profile data - would come from actual profile service
-  const profileData = {
-    completeness: 65,
-    pendingSubmissions: 2,
-  };
+  const { completeness, loading: profileLoading } = useHealthProfile();
+  // Remove locking state - all sections are freely accessible
 
-  // � CONCISE: Main profile sections configuration
-  const mainSections = [
-    {
-      id: 'health_profile',
-      title: 'Health Profile',
-      description:
-        'Manage your health information for personalized recommendations',
-      icon: 'medical' as keyof typeof Ionicons.glyphMap,
-      color: COLORS.primary,
-      completeness: profileData.completeness,
-    },
-    {
-      id: 'settings',
-      title: 'Settings',
-      description: 'App configuration and preferences',
-      icon: 'settings' as keyof typeof Ionicons.glyphMap,
-      color: COLORS.info,
-    },
-    {
-      id: 'data_quality',
-      title: 'Data Quality',
-      description: 'Help improve our database and report issues',
-      icon: 'analytics' as keyof typeof Ionicons.glyphMap,
-      color: COLORS.success,
-      badge:
-        profileData.pendingSubmissions > 0
-          ? profileData.pendingSubmissions
-          : undefined,
-    },
-    {
-      id: 'support',
-      title: 'Support',
-      description: 'Get help and learn about our methodology',
-      icon: 'help-circle' as keyof typeof Ionicons.glyphMap,
-      color: COLORS.warning,
-    },
-    {
-      id: 'about',
-      title: 'About',
-      description: 'App information, terms, and credits',
-      icon: 'information-circle' as keyof typeof Ionicons.glyphMap,
-      color: COLORS.textSecondary,
-    },
-  ];
+  // Remove all progress tracking logic - sections are freely accessible
+
+  // Remove all completion and progress tracking functions
+
+  // Enhance profile sections with dynamic data
+  const mainSections = PROFILE_SECTIONS.map((section: ProfileSectionGroup) => ({
+    ...section,
+    completeness:
+      section.id === MAIN_SECTIONS.HEALTH_PROFILE ? completeness : undefined,
+    // TODO: Add dynamic badge count from submissions service
+    badge: section.id === MAIN_SECTIONS.DATA_QUALITY ? 2 : undefined,
+  }));
 
   const handleSignOut = async () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
@@ -108,33 +85,19 @@ export const ProfileScreen = () => {
     navigation.navigate('Welcome');
   };
 
-  const handleSectionPress = (section: (typeof mainSections)[0]) => {
-    switch (section.id) {
-      case 'health_profile':
-        navigation.navigate('HealthProfileSetup');
-        break;
-      case 'settings':
-        navigation.navigate('SettingsScreen');
-        break;
-      case 'data_quality':
-        navigation.navigate('DataQualityScreen');
-        break;
-      case 'support':
-        navigation.navigate('SupportScreen');
-        break;
-      case 'about':
-        navigation.navigate('AboutScreen');
-        break;
-      default:
-        Alert.alert(
-          'Coming Soon',
-          `${section.title} features are being developed and will be available soon!`
-        );
+  const handleSectionPress = (section: ProfileSectionGroup) => {
+    if (section.route) {
+      navigateToScreen(section.route);
+    } else {
+      Alert.alert(
+        'Coming Soon',
+        `${section.title} features are being developed and will be available soon!`
+      );
     }
   };
 
   // ⚡ FAST: Loading state
-  if (authLoading || isSigningOut) {
+  if (authLoading || isSigningOut || profileLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingContainer}>
@@ -147,60 +110,63 @@ export const ProfileScreen = () => {
     );
   }
 
-  // 🎨 SLEEK: Render main section card
-  const renderMainSection = (section: (typeof mainSections)[0]) => (
-    <TouchableOpacity
-      key={section.id}
-      style={styles.mainSectionCard}
-      onPress={() => handleSectionPress(section)}
-    >
-      <View style={styles.sectionHeader}>
-        <View
-          style={[
-            styles.sectionIconContainer,
-            { backgroundColor: `${section.color}20` },
-          ]}
-        >
-          <Ionicons
-            name={section.icon as keyof typeof Ionicons.glyphMap}
-            size={28}
-            color={section.color}
-          />
-        </View>
-        <View style={styles.sectionInfo}>
-          <View style={styles.sectionTitleRow}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
-            {section.badge && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{section.badge}</Text>
+  // 🎨 SLEEK: Render main section card - all sections freely accessible
+  const renderMainSection = (section: (typeof mainSections)[0]) => {
+    return (
+      <TouchableOpacity
+        key={section.id}
+        style={styles.mainSectionCard}
+        onPress={() => handleSectionPress(section)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.sectionHeader}>
+          <View
+            style={[
+              styles.sectionIconContainer,
+              { backgroundColor: `${section.color}20` },
+            ]}
+          >
+            <Ionicons
+              name={section.icon as keyof typeof Ionicons.glyphMap}
+              size={28}
+              color={section.color}
+            />
+          </View>
+          <View style={styles.sectionInfo}>
+            <View style={styles.sectionTitleRow}>
+              <Text style={styles.sectionTitle}>{section.title}</Text>
+              {section.badge && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{section.badge}</Text>
+                </View>
+              )}
+              {section.completeness !== undefined && (
+                <Text style={styles.completenessText}>
+                  {section.completeness}%
+                </Text>
+              )}
+            </View>
+            <Text style={styles.sectionDescription}>{section.description}</Text>
+            {section.completeness !== undefined && (
+              <View style={styles.progressBar}>
+                <View
+                  style={[
+                    styles.progressFill,
+                    { width: `${section.completeness}%` },
+                  ]}
+                />
               </View>
             )}
-            {section.completeness !== undefined && (
-              <Text style={styles.completenessText}>
-                {section.completeness}%
-              </Text>
-            )}
           </View>
-          <Text style={styles.sectionDescription}>{section.description}</Text>
-          {section.completeness !== undefined && (
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${section.completeness}%` },
-                ]}
-              />
-            </View>
-          )}
+          <Ionicons
+            name="chevron-forward"
+            size={24}
+            color={COLORS.textSecondary}
+          />
         </View>
-        <Ionicons
-          name="chevron-forward"
-          size={24}
-          color={COLORS.textSecondary}
-        />
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   // 🎉 MAIN PROFILE HUB: Show 5-section structure
   return (
@@ -224,8 +190,8 @@ export const ProfileScreen = () => {
           <View style={styles.userCard}>
             <View style={styles.userInfo}>
               <View style={styles.avatar}>
-                <MaterialIcons
-                  name="account-circle"
+                <Ionicons
+                  name="person-circle"
                   size={50}
                   color={COLORS.primary}
                 />
@@ -243,7 +209,7 @@ export const ProfileScreen = () => {
         {/* Guest User Banner */}
         {isGuest && (
           <View style={styles.guestBanner}>
-            <MaterialIcons name="info" size={20} color={COLORS.info} />
+            <Ionicons name="information-circle" size={20} color={COLORS.info} />
             <Text style={styles.guestText}>
               Sign in to save your profile and get personalized recommendations
             </Text>
@@ -260,6 +226,8 @@ export const ProfileScreen = () => {
         <View style={styles.sectionsContainer}>
           {mainSections.map(renderMainSection)}
         </View>
+
+        {/* Remove Save Progress Button - sections are freely accessible */}
 
         {/* App Version */}
         <View style={styles.appInfo}>

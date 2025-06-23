@@ -5,13 +5,14 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   TextInput,
   Alert,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { CustomHeader } from '../../components/common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type {
   AgeRange,
@@ -26,6 +27,38 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
 }) => {
   const [demographics, setDemographics] = useState<Partial<Demographics>>({});
   const [isLoading, setIsLoading] = useState(false);
+
+  // 🔄 Mark step as complete in HealthProfileSetupScreen
+  const markStepComplete = async (stepId: string) => {
+    try {
+      const savedProgress = await AsyncStorage.getItem(
+        'health_profile_setup_progress'
+      );
+      if (savedProgress) {
+        const { steps } = JSON.parse(savedProgress);
+        const updatedSteps = steps.map(
+          (step: { id: string; completed: boolean }) =>
+            step.id === stepId ? { ...step, completed: true } : step
+        );
+
+        // Advance to next step
+        const completedStepIndex = steps.findIndex(
+          (step: { id: string }) => step.id === stepId
+        );
+        const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
+
+        await AsyncStorage.setItem(
+          'health_profile_setup_progress',
+          JSON.stringify({
+            currentStep: nextStep,
+            steps: updatedSteps,
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error marking step complete:', error);
+    }
+  };
 
   // ⚡ FAST: Pre-defined options for quick selection
   const ageRanges: { value: AgeRange; label: string; description: string }[] = [
@@ -118,11 +151,11 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
       // Simulate save
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      Alert.alert(
-        'Demographics Saved! ✅',
-        'Your basic information has been saved. This helps us provide age-appropriate recommendations.',
-        [{ text: 'Continue', onPress: () => navigation.goBack() }]
-      );
+      // Mark demographics step as complete and advance to next step
+      await markStepComplete('demographics');
+
+      // No success popup - user continues to next step seamlessly
+      navigation.goBack();
     } catch (error) {
       console.error('Error saving demographics:', error);
       Alert.alert('Error', 'Failed to save information. Please try again.');
@@ -226,15 +259,8 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>Basic Information</Text>
-        <View style={styles.placeholder} />
-      </View>
+    <View style={styles.container}>
+      <CustomHeader title="Basic Information" />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Info Banner */}
@@ -341,7 +367,7 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
@@ -350,23 +376,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.gray200,
-  },
-  title: {
-    fontSize: TYPOGRAPHY.sizes.lg,
-    fontWeight: TYPOGRAPHY.weights.semibold,
-    color: COLORS.textPrimary,
-  },
-  placeholder: {
-    width: 24,
   },
   content: {
     flex: 1,

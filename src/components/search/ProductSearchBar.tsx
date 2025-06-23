@@ -2,14 +2,13 @@
 import React, { useState, useRef, useCallback } from 'react';
 import {
   View,
-  Text,
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Animated,
   Keyboard,
+  Pressable,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 interface ProductSearchBarProps {
@@ -19,44 +18,35 @@ interface ProductSearchBarProps {
   placeholder?: string;
   autoFocus?: boolean;
   showSuggestions?: boolean;
+  onVoicePress?: () => void;
 }
 
 export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
   onSearchPress,
   onFocus,
   onBlur,
-  placeholder = "Search supplements, vitamins, medications...",
+  placeholder = 'Search supplements, vitamins...',
   autoFocus = false,
-  showSuggestions = true,
+  onVoicePress,
 }) => {
   const [query, setQuery] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [showMic, setShowMic] = useState(true);
   const inputRef = useRef<TextInput>(null);
-  const animatedValue = useRef(new Animated.Value(0)).current;
 
   const handleFocus = useCallback(() => {
     setIsFocused(true);
     onFocus?.();
-    
-    // Animate search bar expansion
-    Animated.timing(animatedValue, {
-      toValue: 1,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [animatedValue, onFocus]);
+    setShowMic(false);
+  }, [onFocus]);
 
   const handleBlur = useCallback(() => {
     setIsFocused(false);
     onBlur?.();
-    
-    // Animate search bar contraction
-    Animated.timing(animatedValue, {
-      toValue: 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [animatedValue, onBlur]);
+    if (!query) {
+      setShowMic(true);
+    }
+  }, [query, onBlur]);
 
   const handleSearch = useCallback(() => {
     if (query.trim()) {
@@ -70,115 +60,81 @@ export const ProductSearchBar: React.FC<ProductSearchBarProps> = ({
     inputRef.current?.focus();
   }, []);
 
-  const handleCancel = useCallback(() => {
-    setQuery('');
-    inputRef.current?.blur();
-    Keyboard.dismiss();
-  }, []);
-
-  // Animated styles
-  const searchBarStyle = {
-    borderColor: animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [COLORS.gray200, COLORS.primary],
-    }),
-    shadowOpacity: animatedValue.interpolate({
-      inputRange: [0, 1],
-      outputRange: [0.1, 0.2],
-    }),
-  };
-
-  const cancelButtonOpacity = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-  });
-
-  const cancelButtonWidth = animatedValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 60],
-  });
+  const handleVoicePress = useCallback(() => {
+    if (onVoicePress) {
+      onVoicePress();
+    }
+  }, [onVoicePress]);
 
   return (
     <View style={styles.container}>
-      <View style={styles.searchContainer}>
-        <Animated.View style={[styles.searchBar, searchBarStyle]}>
+      <View style={styles.searchWrapper}>
+        {/* Simplified background - guaranteed to be visible */}
+        <View style={styles.searchBackground}>
           {/* Search Icon */}
-          <TouchableOpacity 
-            style={styles.searchIcon}
+          <TouchableOpacity
+            style={styles.searchIconContainer}
             onPress={handleSearch}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name="search" 
-              size={20} 
-              color={isFocused ? COLORS.primary : COLORS.textSecondary} 
-            />
+            <View
+              style={[styles.iconCircle, isFocused && styles.iconCircleFocused]}
+            >
+              <Ionicons
+                name="search"
+                size={20}
+                color={isFocused ? COLORS.primary : COLORS.gray500}
+              />
+            </View>
           </TouchableOpacity>
 
           {/* Text Input */}
-          <TextInput
-            ref={inputRef}
-            style={styles.textInput}
-            placeholder={placeholder}
-            placeholderTextColor={COLORS.textSecondary}
-            value={query}
-            onChangeText={setQuery}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            onSubmitEditing={handleSearch}
-            autoFocus={autoFocus}
-            returnKeyType="search"
-            autoCapitalize="none"
-            autoCorrect={false}
-            clearButtonMode="never" // We'll handle clear manually
-          />
+          <View style={styles.inputWrapper}>
+            <TextInput
+              ref={inputRef}
+              style={[styles.textInput, isFocused && styles.textInputFocused]}
+              placeholder={placeholder}
+              placeholderTextColor={COLORS.gray400}
+              value={query}
+              onChangeText={setQuery}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
+              onSubmitEditing={handleSearch}
+              autoFocus={autoFocus}
+              returnKeyType="search"
+              autoCapitalize="none"
+              autoCorrect={false}
+              selectionColor={COLORS.primary}
+            />
+          </View>
 
           {/* Clear Button */}
           {query.length > 0 && (
-            <TouchableOpacity 
+            <Pressable
               style={styles.clearButton}
               onPress={handleClear}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <View style={styles.clearIconContainer}>
+                <Ionicons name="close" size={18} color={COLORS.gray500} />
+              </View>
+            </Pressable>
+          )}
+
+          {/* Voice Search Button */}
+          {showMic && onVoicePress && !query && (
+            <TouchableOpacity
+              style={styles.voiceButton}
+              onPress={handleVoicePress}
               activeOpacity={0.7}
             >
-              <Ionicons 
-                name="close-circle" 
-                size={18} 
-                color={COLORS.textSecondary} 
-              />
+              <View style={styles.voiceIconContainer}>
+                <MaterialIcons name="mic" size={18} color={COLORS.white} />
+              </View>
             </TouchableOpacity>
           )}
-        </Animated.View>
-
-        {/* Cancel Button */}
-        {isFocused && (
-          <Animated.View 
-            style={[
-              styles.cancelButtonContainer,
-              {
-                opacity: cancelButtonOpacity,
-                width: cancelButtonWidth,
-              }
-            ]}
-          >
-            <TouchableOpacity 
-              style={styles.cancelButton}
-              onPress={handleCancel}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.cancelButtonText}>Cancel</Text>
-            </TouchableOpacity>
-          </Animated.View>
-        )}
-      </View>
-
-      {/* Search Suggestions Placeholder */}
-      {isFocused && showSuggestions && query.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          <Text style={styles.suggestionsPlaceholder}>
-            Search suggestions will appear here
-          </Text>
         </View>
-      )}
+      </View>
     </View>
   );
 };
@@ -187,71 +143,75 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.md,
+    zIndex: 1,
   },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  searchWrapper: {
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 5,
   },
-  searchBar: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 12,
+  searchBackground: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
     borderWidth: 1,
     borderColor: COLORS.gray200,
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.sm,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    paddingVertical: SPACING.md,
+    minHeight: 56,
   },
-  searchIcon: {
+  searchIconContainer: {
     marginRight: SPACING.sm,
   },
-  textInput: {
-    flex: 1,
-    fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.textPrimary,
-    paddingVertical: 0, // Remove default padding
-  },
-  clearButton: {
-    marginLeft: SPACING.sm,
-    padding: SPACING.xs,
-  },
-  cancelButtonContainer: {
-    overflow: 'hidden',
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(37, 99, 235, 0.08)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  cancelButton: {
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: SPACING.xs,
+  iconCircleFocused: {
+    backgroundColor: 'rgba(37, 99, 235, 0.12)',
   },
-  cancelButtonText: {
+  inputWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  textInput: {
     fontSize: TYPOGRAPHY.sizes.base,
-    color: COLORS.primary,
     fontWeight: TYPOGRAPHY.weights.medium,
+    color: COLORS.textPrimary,
+    paddingVertical: 0,
   },
-  suggestionsContainer: {
-    backgroundColor: COLORS.backgroundSecondary,
-    borderRadius: 8,
-    marginTop: SPACING.xs,
-    padding: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.gray200,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+  textInputFocused: {
+    fontWeight: TYPOGRAPHY.weights.semibold,
   },
-  suggestionsPlaceholder: {
-    fontSize: TYPOGRAPHY.sizes.sm,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    fontStyle: 'italic',
+  clearButton: {
+    marginLeft: SPACING.xs,
+  },
+  clearIconContainer: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(107, 114, 128, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  voiceButton: {
+    marginLeft: SPACING.sm,
+  },
+  voiceIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

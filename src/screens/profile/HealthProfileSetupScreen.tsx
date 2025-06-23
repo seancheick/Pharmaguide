@@ -1,6 +1,6 @@
 // src/screens/profile/HealthProfileSetupScreen.tsx
 // 🚀 WORLD-CLASS: Fast, Light, Legal, Easy, Sleek
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,21 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
+  Alert,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Ionicons } from '@expo/vector-icons';
 import { ConsentModal } from '../../components/privacy/ConsentModal';
-import { privacyService } from '../../services/privacy/privacyService';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { ConsentType, ProfileSetupStep } from '../../types/healthProfile';
 import { HealthProfileSetupScreenProps } from '../../types/navigation';
+
+// Storage keys for persistence
+const STORAGE_KEYS = {
+  SETUP_PROGRESS: 'health_profile_setup_progress',
+  SETUP_DATA: 'health_profile_setup_data',
+  CONSENTS: 'health_profile_consents',
+} as const;
 
 export const HealthProfileSetupScreen: React.FC<
   HealthProfileSetupScreenProps
@@ -23,11 +31,13 @@ export const HealthProfileSetupScreen: React.FC<
   const [currentStep, setCurrentStep] = useState(0);
   const [showConsentModal, setShowConsentModal] = useState(false);
   const [consents, setConsents] = useState<Record<ConsentType, boolean>>(
-    {} as any
+    {} as Record<ConsentType, boolean>
   );
   const [progressAnim] = useState(new Animated.Value(0));
+  const [setupData, setSetupData] = useState<Record<string, unknown>>({});
+  const [isLoading, setIsLoading] = useState(true);
 
-  // ⚡ OPTIMIZED: Streamlined steps for speed
+  // ⚡ OPTIMIZED: Streamlined 5-step flow (medications moved to Stack tab)
   const setupSteps: ProfileSetupStep[] = [
     {
       id: 'privacy_consent',
@@ -47,18 +57,9 @@ export const HealthProfileSetupScreen: React.FC<
       estimatedTime: 1,
     },
     {
-      id: 'medications',
-      title: 'Medications & Supplements',
-      description: 'Add to your stack for interaction checking',
-      required: false,
-      completed: false,
-      consentRequired: true,
-      estimatedTime: 3,
-    },
-    {
       id: 'health_goals',
       title: 'Health Goals',
-      description: 'What do you want to achieve? (Pick 3)',
+      description: 'What do you want to achieve? (Pick up to 3)',
       required: false,
       completed: false,
       estimatedTime: 1,
@@ -85,19 +86,112 @@ export const HealthProfileSetupScreen: React.FC<
 
   const [steps, setSteps] = useState(setupSteps);
 
-  useEffect(() => {
-    animateProgress();
+  // 📊 SMART: Progress calculation for 5-step flow
+  const getProgressPercentage = useCallback(() => {
+    const completedSteps = steps.filter(step => step.completed).length;
+    return (completedSteps / 5) * 100; // Updated for 5 steps (removed medications step)
   }, [steps]);
 
   // ✨ SLEEK: Smooth animations
-  const animateProgress = () => {
+  const animateProgress = useCallback(() => {
     const progress = getProgressPercentage() / 100;
     Animated.timing(progressAnim, {
       toValue: progress,
       duration: 500,
       useNativeDriver: false,
     }).start();
+  }, [progressAnim, getProgressPercentage]);
+
+  // 💾 Save progress to AsyncStorage
+  const saveProgress = useCallback(async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(
+          STORAGE_KEYS.SETUP_PROGRESS,
+          JSON.stringify({ currentStep, steps })
+        ),
+        AsyncStorage.setItem(
+          STORAGE_KEYS.SETUP_DATA,
+          JSON.stringify(setupData)
+        ),
+        AsyncStorage.setItem(STORAGE_KEYS.CONSENTS, JSON.stringify(consents)),
+      ]);
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  }, [currentStep, steps, setupData, consents]);
+
+  // 💾 DATA PERSISTENCE: Load saved progress on mount
+  useEffect(() => {
+    loadSavedProgress();
+  }, []);
+
+  // 🔄 AUTO-SAVE: Save progress whenever steps change
+  useEffect(() => {
+    if (!isLoading) {
+      saveProgress();
+    }
+    animateProgress();
+  }, [steps, currentStep, isLoading, saveProgress, animateProgress]);
+
+  // 🎯 Listen for navigation focus to reload saved progress
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      // Reload progress when user returns to this screen
+      loadSavedProgress();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // 💾 Load saved progress from AsyncStorage
+  const loadSavedProgress = async () => {
+    try {
+      const [savedProgress, savedData, savedConsents] = await Promise.all([
+        AsyncStorage.getItem(STORAGE_KEYS.SETUP_PROGRESS),
+        AsyncStorage.getItem(STORAGE_KEYS.SETUP_DATA),
+        AsyncStorage.getItem(STORAGE_KEYS.CONSENTS),
+      ]);
+
+      if (savedProgress) {
+        const { currentStep: savedStep, steps: savedSteps } =
+          JSON.parse(savedProgress);
+        setCurrentStep(savedStep || 0);
+        if (savedSteps) {
+          setSteps(savedSteps);
+        }
+      }
+
+      if (savedData) {
+        setSetupData(JSON.parse(savedData));
+      }
+
+      if (savedConsents) {
+        setConsents(JSON.parse(savedConsents));
+      }
+    } catch (error) {
+      console.error('Error loading saved progress:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  // Remove duplicate saveProgress function
+
+  // 🗑️ Clear saved progress (for testing or reset)
+  const clearSavedProgress = async () => {
+    try {
+      await Promise.all([
+        AsyncStorage.removeItem(STORAGE_KEYS.SETUP_PROGRESS),
+        AsyncStorage.removeItem(STORAGE_KEYS.SETUP_DATA),
+        AsyncStorage.removeItem(STORAGE_KEYS.CONSENTS),
+      ]);
+    } catch (error) {
+      console.error('Error clearing progress:', error);
+    }
+  };
+
+  // Remove duplicate animateProgress function
 
   // ⚖️ LEGAL: Proper consent handling
   const handleConsentGranted = async (
@@ -134,24 +228,108 @@ export const HealthProfileSetupScreen: React.FC<
   };
 
   const navigateToStep = (stepId: string) => {
+    // 🧭 SMART: Navigation mapping (medications removed - now handled in Stack tab)
     const screenMap: Record<string, string> = {
       demographics: 'DemographicsScreen',
       health_goals: 'HealthGoalsScreen',
       health_conditions: 'HealthConditionsScreen',
       allergies: 'AllergiesScreen',
-      medications: 'MedicationsScreen',
+      // medications removed - users will add these in the Stack tab
     };
 
-    const screenName = screenMap[stepId] as keyof typeof screenMap;
+    const screenName = screenMap[stepId];
     if (screenName) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       navigation.navigate(screenName as any);
     }
   };
 
-  const getProgressPercentage = () => {
-    const completedSteps = steps.filter(step => step.completed).length;
-    return (completedSteps / steps.length) * 100;
+  // Remove duplicate functions - they are already defined above
+
+  // 🎉 Handle setup completion with success message
+  const handleCompleteSetup = async () => {
+    try {
+      // Clear saved progress since setup is complete
+      await clearSavedProgress();
+
+      // Show success popup with Stack tab guidance
+      Alert.alert(
+        '🎉 Profile Setup Complete!',
+        'Great job! Your health profile is now set up.\n\nNext step: Optimize your stack by adding supplements or medications in the Stack tab to check for interactions.',
+        [
+          {
+            text: 'Got it!',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error completing setup:', error);
+      navigation.goBack();
+    }
   };
+
+  // � Handle save progress and return to ProfileScreen
+  const handleSaveProgress = async () => {
+    try {
+      await saveProgress();
+      Alert.alert(
+        '💾 Progress Saved!',
+        'Your progress has been saved. You can continue setup anytime from the Profile tab.',
+        [
+          {
+            text: 'Continue Setup',
+            style: 'cancel',
+          },
+          {
+            text: 'Return to Profile',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
+    } catch (error) {
+      console.error('Error saving progress:', error);
+      Alert.alert('Error', 'Failed to save progress. Please try again.');
+    }
+  };
+
+  // �🔄 Update step completion and auto-advance to next step
+  const updateStepCompletion = useCallback(
+    (stepId: string, completed: boolean) => {
+      setSteps(prevSteps => {
+        const updatedSteps = prevSteps.map(step =>
+          step.id === stepId ? { ...step, completed } : step
+        );
+
+        // Auto-advance to next step when current step is completed
+        if (completed) {
+          const completedStepIndex = updatedSteps.findIndex(
+            step => step.id === stepId
+          );
+          const nextStepIndex = completedStepIndex + 1;
+
+          // Advance currentStep if we're not already past this step
+          if (
+            completedStepIndex === currentStep &&
+            nextStepIndex < updatedSteps.length
+          ) {
+            setCurrentStep(nextStepIndex);
+          }
+        }
+
+        return updatedSteps;
+      });
+    },
+    [currentStep]
+  );
+
+  // 💾 Auto-save form data
+  const updateFormData = useCallback((stepId: string, data: unknown) => {
+    setSetupData(prev => ({
+      ...prev,
+      [stepId]: data,
+    }));
+  }, []);
 
   // 🪶 LIGHT: Minimal render function
   const renderStepItem = (step: ProfileSetupStep, index: number) => {
@@ -233,7 +411,7 @@ export const HealthProfileSetupScreen: React.FC<
           <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.title}>Health Profile</Text>
-        <TouchableOpacity onPress={() => navigation.navigate('MainTabs')}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
       </View>
@@ -261,11 +439,7 @@ export const HealthProfileSetupScreen: React.FC<
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
         <View style={styles.hero}>
-          <MaterialIcons
-            name="health-and-safety"
-            size={40}
-            color={COLORS.primary}
-          />
+          <Ionicons name="shield-checkmark" size={40} color={COLORS.primary} />
           <Text style={styles.heroTitle}>Personalized Safety</Text>
           <Text style={styles.heroSubtitle}>
             Get recommendations tailored to your unique health profile
@@ -301,18 +475,30 @@ export const HealthProfileSetupScreen: React.FC<
         </View>
       </ScrollView>
 
-      {/* Action Button */}
-      {getProgressPercentage() === 100 && (
-        <View style={styles.footer}>
+      {/* Action Buttons */}
+      <View style={styles.footer}>
+        {getProgressPercentage() === 100 ? (
           <TouchableOpacity
             style={styles.completeButton}
-            onPress={() => navigation.navigate('MainTabs')}
+            onPress={handleCompleteSetup}
           >
-            <Text style={styles.completeButtonText}>Start Using App</Text>
+            <Text style={styles.completeButtonText}>Complete Setup</Text>
             <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
           </TouchableOpacity>
-        </View>
-      )}
+        ) : (
+          <TouchableOpacity
+            style={styles.saveProgressButton}
+            onPress={handleSaveProgress}
+          >
+            <Ionicons
+              name="bookmark-outline"
+              size={20}
+              color={COLORS.primary}
+            />
+            <Text style={styles.saveProgressButtonText}>Save Progress</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
       <ConsentModal
         visible={showConsentModal}
@@ -511,6 +697,22 @@ const styles = StyleSheet.create({
   completeButtonText: {
     fontSize: TYPOGRAPHY.sizes.base,
     color: COLORS.white,
+    fontWeight: TYPOGRAPHY.weights.semibold,
+  },
+  saveProgressButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.backgroundSecondary,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    gap: SPACING.sm,
+  },
+  saveProgressButtonText: {
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.primary,
     fontWeight: TYPOGRAPHY.weights.semibold,
   },
 });

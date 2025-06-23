@@ -4,14 +4,15 @@
 import { NavigatorScreenParams } from '@react-navigation/native';
 import { StackScreenProps } from '@react-navigation/stack';
 import { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { CompositeScreenProps } from '@react-navigation/native';
 
 // ===== ROOT STACK NAVIGATOR =====
 export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList>;
   Welcome: undefined;
-  
+
   // Product & Search Screens
-  Search: undefined;
+  Search: { initialQuery?: string } | undefined;
   OCR: undefined;
   ProductSubmission: undefined;
   ProductAnalysisResults: {
@@ -19,7 +20,7 @@ export type RootStackParamList = {
     barcode?: string;
     productData?: any;
   };
-  
+
   // Health Profile Screens
   HealthProfileSetup: undefined;
   DemographicsScreen: undefined;
@@ -27,30 +28,30 @@ export type RootStackParamList = {
   HealthConditionsScreen: undefined;
   AllergiesScreen: undefined;
   MedicationsScreen: undefined;
-  
+
   // Profile Section Screens
   SettingsScreen: undefined;
   DataQualityScreen: undefined;
   SupportScreen: undefined;
   AboutScreen: undefined;
-  
+
   // Settings Sub-screens
   NotificationSettingsScreen: undefined;
   PrivacySettingsScreen: undefined;
   AccessibilitySettingsScreen: undefined;
   ThemeSettingsScreen: undefined;
-  
+
   // Data Quality Sub-screens
   ReportIssueScreen: undefined;
   MySubmissionsScreen: undefined;
   ContributionsScreen: undefined;
-  
+
   // Support Sub-screens
   HelpScreen: undefined;
   FAQScreen: undefined;
   DisclaimersScreen: undefined;
   ContactSupportScreen: undefined;
-  
+
   // About Sub-screens
   AppInfoScreen: undefined;
   TermsOfServiceScreen: undefined;
@@ -76,37 +77,57 @@ export type AuthStackParamList = {
 // ===== SCREEN PROPS TYPES =====
 
 // Root Stack Screen Props
-export type RootStackScreenProps<T extends keyof RootStackParamList> = 
+export type RootStackScreenProps<T extends keyof RootStackParamList> =
   StackScreenProps<RootStackParamList, T>;
 
 // Main Tab Screen Props
-export type MainTabScreenProps<T extends keyof MainTabParamList> = 
+export type MainTabScreenProps<T extends keyof MainTabParamList> =
   BottomTabScreenProps<MainTabParamList, T>;
 
 // Auth Stack Screen Props
-export type AuthStackScreenProps<T extends keyof AuthStackParamList> = 
+export type AuthStackScreenProps<T extends keyof AuthStackParamList> =
   StackScreenProps<AuthStackParamList, T>;
 
 // ===== SPECIFIC SCREEN PROPS =====
 
-// Main Tab Screens
-export type HomeScreenProps = MainTabScreenProps<'Home'>;
-export type ScanScreenProps = MainTabScreenProps<'Scan'>;
-export type StackScreenProps = MainTabScreenProps<'Stack'>;
-export type AIScreenProps = MainTabScreenProps<'AI'>;
-export type ProfileScreenProps = MainTabScreenProps<'Profile'>;
+// Main Tab Screens (with composite navigation for stack access)
+export type HomeScreenProps = CompositeScreenProps<
+  MainTabScreenProps<'Home'>,
+  RootStackScreenProps<keyof RootStackParamList>
+>;
+export type ScanScreenProps = CompositeScreenProps<
+  MainTabScreenProps<'Scan'>,
+  RootStackScreenProps<keyof RootStackParamList>
+>;
+export type StackScreenProps = CompositeScreenProps<
+  MainTabScreenProps<'Stack'>,
+  RootStackScreenProps<keyof RootStackParamList>
+>;
+export type AIScreenProps = CompositeScreenProps<
+  MainTabScreenProps<'AI'>,
+  RootStackScreenProps<keyof RootStackParamList>
+>;
+export type ProfileScreenProps = CompositeScreenProps<
+  MainTabScreenProps<'Profile'>,
+  RootStackScreenProps<keyof RootStackParamList>
+>;
 
 // Product & Search Screens
 export type SearchScreenProps = RootStackScreenProps<'Search'>;
 export type OCRScreenProps = RootStackScreenProps<'OCR'>;
-export type ProductSubmissionScreenProps = RootStackScreenProps<'ProductSubmission'>;
-export type ProductAnalysisResultsProps = RootStackScreenProps<'ProductAnalysisResults'>;
+export type ProductSubmissionScreenProps =
+  RootStackScreenProps<'ProductSubmission'>;
+export type ProductAnalysisResultsProps =
+  RootStackScreenProps<'ProductAnalysisResults'>;
 
 // Health Profile Screens
-export type HealthProfileSetupScreenProps = RootStackScreenProps<'HealthProfileSetup'>;
-export type DemographicsScreenProps = RootStackScreenProps<'DemographicsScreen'>;
+export type HealthProfileSetupScreenProps =
+  RootStackScreenProps<'HealthProfileSetup'>;
+export type DemographicsScreenProps =
+  RootStackScreenProps<'DemographicsScreen'>;
 export type HealthGoalsScreenProps = RootStackScreenProps<'HealthGoalsScreen'>;
-export type HealthConditionsScreenProps = RootStackScreenProps<'HealthConditionsScreen'>;
+export type HealthConditionsScreenProps =
+  RootStackScreenProps<'HealthConditionsScreen'>;
 export type AllergiesScreenProps = RootStackScreenProps<'AllergiesScreen'>;
 export type MedicationsScreenProps = RootStackScreenProps<'MedicationsScreen'>;
 
@@ -117,26 +138,35 @@ export type SupportScreenProps = RootStackScreenProps<'SupportScreen'>;
 export type AboutScreenProps = RootStackScreenProps<'AboutScreen'>;
 
 // Settings Sub-screens
-export type NotificationSettingsScreenProps = RootStackScreenProps<'NotificationSettingsScreen'>;
-export type PrivacySettingsScreenProps = RootStackScreenProps<'PrivacySettingsScreen'>;
-export type AccessibilitySettingsScreenProps = RootStackScreenProps<'AccessibilitySettingsScreen'>;
-export type ThemeSettingsScreenProps = RootStackScreenProps<'ThemeSettingsScreen'>;
+export type NotificationSettingsScreenProps =
+  RootStackScreenProps<'NotificationSettingsScreen'>;
+export type PrivacySettingsScreenProps =
+  RootStackScreenProps<'PrivacySettingsScreen'>;
+export type AccessibilitySettingsScreenProps =
+  RootStackScreenProps<'AccessibilitySettingsScreen'>;
+export type ThemeSettingsScreenProps =
+  RootStackScreenProps<'ThemeSettingsScreen'>;
 
 // Data Quality Sub-screens
 export type ReportIssueScreenProps = RootStackScreenProps<'ReportIssueScreen'>;
-export type MySubmissionsScreenProps = RootStackScreenProps<'MySubmissionsScreen'>;
-export type ContributionsScreenProps = RootStackScreenProps<'ContributionsScreen'>;
+export type MySubmissionsScreenProps =
+  RootStackScreenProps<'MySubmissionsScreen'>;
+export type ContributionsScreenProps =
+  RootStackScreenProps<'ContributionsScreen'>;
 
 // Support Sub-screens
 export type HelpScreenProps = RootStackScreenProps<'HelpScreen'>;
 export type FAQScreenProps = RootStackScreenProps<'FAQScreen'>;
 export type DisclaimersScreenProps = RootStackScreenProps<'DisclaimersScreen'>;
-export type ContactSupportScreenProps = RootStackScreenProps<'ContactSupportScreen'>;
+export type ContactSupportScreenProps =
+  RootStackScreenProps<'ContactSupportScreen'>;
 
 // About Sub-screens
 export type AppInfoScreenProps = RootStackScreenProps<'AppInfoScreen'>;
-export type TermsOfServiceScreenProps = RootStackScreenProps<'TermsOfServiceScreen'>;
-export type PrivacyPolicyScreenProps = RootStackScreenProps<'PrivacyPolicyScreen'>;
+export type TermsOfServiceScreenProps =
+  RootStackScreenProps<'TermsOfServiceScreen'>;
+export type PrivacyPolicyScreenProps =
+  RootStackScreenProps<'PrivacyPolicyScreen'>;
 export type CreditsScreenProps = RootStackScreenProps<'CreditsScreen'>;
 export type LicensesScreenProps = RootStackScreenProps<'LicensesScreen'>;
 
@@ -152,8 +182,4 @@ declare global {
 }
 
 // ===== EXPORT ALL TYPES =====
-export type {
-  RootStackParamList,
-  MainTabParamList,
-  AuthStackParamList,
-};
+export type { RootStackParamList, MainTabParamList, AuthStackParamList };

@@ -1,5 +1,5 @@
 // src/screens/ai/AIScreen.tsx
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,12 +13,19 @@ import {
   ActivityIndicator,
   Keyboard,
   Animated,
-} from "react-native";
-import { Ionicons, MaterialIcons } from "@expo/vector-icons";
-import { COLORS, TYPOGRAPHY, SPACING } from "../../constants";
-import { aiChatService, ChatMessage } from "../../services/ai/aiChatService";
-import { useStackStore } from "../../stores/stackStore";
-import { gamificationService } from "../../services/gamification/gamificationService";
+} from 'react-native';
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
+import { aiChatService, ChatMessage } from '../../services/ai/aiChatService';
+import { useStackStore } from '../../stores/stackStore';
+import { gamificationService } from '../../services/gamification/gamificationService';
+import { useAIConsent } from '../../hooks/useAIConsent';
+import { AIConsentModal } from '../../components/privacy/AIConsentModal';
+import { handleAIConsentError } from '../../hooks/useAIConsent';
+import { OfflineIndicator } from '../../components/common/OfflineIndicator';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import type { AIScreenProps } from '../../types/navigation';
 
 // Helper function to format timestamps
 const formatTimestamp = (date: Date) => {
@@ -28,16 +35,16 @@ const formatTimestamp = (date: Date) => {
   const hours = Math.floor(diff / 3600000);
   const days = Math.floor(diff / 86400000);
 
-  if (minutes < 1) return "Just now";
+  if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
   if (hours < 24) return `${hours}h ago`;
   if (days < 7) return `${days}d ago`;
 
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+  return date.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
   });
 };
 
@@ -51,7 +58,7 @@ const MessageBubble = React.memo(
     showTimestamp: boolean;
     previousMessage?: ChatMessage;
   }) => {
-    const isUser = message.role === "user";
+    const isUser = message.role === 'user';
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(20)).current;
 
@@ -79,8 +86,8 @@ const MessageBubble = React.memo(
       previousMessage?.timestamp instanceof Date
         ? previousMessage.timestamp
         : previousMessage
-        ? new Date(previousMessage.timestamp)
-        : null;
+          ? new Date(previousMessage.timestamp)
+          : null;
 
     // Show timestamp if it's the first message or if more than 5 minutes have passed
     const shouldShowTimestamp =
@@ -239,20 +246,35 @@ const TypingIndicator = () => {
 };
 
 export function AIScreen() {
+  const navigation = useNavigation<AIScreenProps['navigation']>();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [inputText, setInputText] = useState("");
+  const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [isTyping, setIsTyping] = useState(false);
   const flatListRef = useRef<FlatList>(null);
   const { stack } = useStackStore();
 
+  // 🔒 HIPAA COMPLIANT: AI Consent Management
+  const {
+    hasConsent,
+    canUseAI,
+    showConsentModal: showModal,
+    hideConsentModal,
+    updateConsent,
+    requestAIAnalysis,
+    userId,
+  } = useAIConsent();
+
+  // 📡 Network State Management
+  const { isOnline, isOffline } = useNetworkState();
+
   const suggestedQuestions = [
     "What's the best time to take magnesium?",
-    "Can I take vitamin D with calcium?",
-    "What are signs of vitamin B12 deficiency?",
-    "How do I know if a supplement is high quality?",
-    "What interactions should I watch for with my stack?",
+    'Can I take vitamin D with calcium?',
+    'What are signs of vitamin B12 deficiency?',
+    'How do I know if a supplement is high quality?',
+    'What interactions should I watch for with my stack?',
   ];
 
   useEffect(() => {
@@ -265,30 +287,30 @@ export function AIScreen() {
 
     if (
       history.length === 0 ||
-      (history.length === 1 && history[0].role === "system")
+      (history.length === 1 && history[0].role === 'system')
     ) {
       // Add welcome message with quick actions
       const welcomeMessage: ChatMessage = {
         id: Date.now().toString(),
-        role: "assistant",
+        role: 'assistant',
         content:
           "Hello! I'm your AI Pharmacist. I can help you understand supplements, check interactions, suggest dosages, and answer your health questions. What would you like to know?",
         timestamp: new Date(),
         metadata: {
-          sources: [{ badge: "👋", text: "Welcome" }],
+          sources: [{ badge: '👋', text: 'Welcome' }],
           quickActions: [
             {
-              label: "Check my stack",
+              label: 'Check my stack',
               onPress: () =>
                 handleSuggestedQuestion(
-                  "Can you review my current supplement stack for interactions?"
+                  'Can you review my current supplement stack for interactions?'
                 ),
             },
             {
-              label: "Dosage help",
+              label: 'Dosage help',
               onPress: () =>
                 handleSuggestedQuestion(
-                  "What are the recommended dosages for common vitamins?"
+                  'What are the recommended dosages for common vitamins?'
                 ),
             },
           ],
@@ -296,33 +318,39 @@ export function AIScreen() {
       };
       setMessages([welcomeMessage]);
     } else {
-      setMessages(history.filter((m) => m.role !== "system"));
+      setMessages(history.filter(m => m.role !== 'system'));
     }
   };
 
   const sendMessage = async () => {
     if (!inputText.trim() || isLoading) return;
 
+    // 🔒 HIPAA COMPLIANCE: Check AI consent before processing
+    const canProceed = await requestAIAnalysis();
+    if (!canProceed) {
+      return; // Consent modal will be shown
+    }
+
     const userInput = inputText.trim();
-    setInputText("");
+    setInputText('');
     setShowSuggestions(false);
     Keyboard.dismiss();
 
     // Add user message immediately
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
-      role: "user",
+      role: 'user',
       content: userInput,
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
     setIsTyping(true);
 
     try {
       // Simulate typing delay for better UX
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       // Send message and get response
       const response = await aiChatService.sendMessage(userInput);
@@ -340,11 +368,11 @@ export function AIScreen() {
         },
       };
 
-      setMessages((prev) => [...prev, aiResponse]);
+      setMessages(prev => [...prev, aiResponse]);
 
       // Award points for using AI chat
       const pointsResult = await gamificationService.awardPoints(
-        "AI_CONSULTATION" as any,
+        'AI_CONSULTATION' as any,
         {
           question: userInput.substring(0, 100),
           timestamp: new Date().toISOString(),
@@ -354,7 +382,7 @@ export function AIScreen() {
       // Show level up notification if applicable
       if (pointsResult?.level_up) {
         // You could show a toast or modal here
-        console.log("Level up!", pointsResult.new_level);
+        console.log('Level up!', pointsResult.new_level);
       }
 
       // Scroll to bottom
@@ -362,21 +390,21 @@ export function AIScreen() {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error("Error sending message:", error);
+      console.error('Error sending message:', error);
       setIsTyping(false);
 
       // Add error message
       const errorMessage: ChatMessage = {
         id: Date.now().toString(),
-        role: "assistant",
+        role: 'assistant',
         content:
           "I'm having trouble processing your request right now. Please try again in a moment.",
         timestamp: new Date(),
         metadata: {
-          sources: [{ badge: "⚠️", text: "Error" }],
+          sources: [{ badge: '⚠️', text: 'Error' }],
         },
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
     }
@@ -386,20 +414,20 @@ export function AIScreen() {
     const actions = [];
 
     // Add follow-up actions based on content
-    if (content.toLowerCase().includes("interaction")) {
+    if (content.toLowerCase().includes('interaction')) {
       actions.push({
-        label: "View my stack",
-        onPress: () => navigation.navigate("Stack" as never),
+        label: 'View my stack',
+        onPress: () => navigation.navigate('Stack'),
       });
     }
 
     if (
-      content.toLowerCase().includes("dosage") ||
-      content.toLowerCase().includes("take")
+      content.toLowerCase().includes('dosage') ||
+      content.toLowerCase().includes('take')
     ) {
       actions.push({
-        label: "Set reminder",
-        onPress: () => console.log("Set reminder"),
+        label: 'Set reminder',
+        onPress: () => console.log('Set reminder'),
       });
     }
 
@@ -434,9 +462,18 @@ export function AIScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.headerTitle}>AI Pharmacist</Text>
-          <Text style={styles.headerSubtitle}>Always here to help</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.headerTitle}>AI Pharmacist</Text>
+            <Text style={styles.headerSubtitle}>
+              {canUseAI && isOnline
+                ? 'Always here to help'
+                : isOffline
+                  ? 'Limited offline mode'
+                  : 'Enable AI for personalized help'}
+            </Text>
+          </View>
+          <OfflineIndicator showDetails={true} />
         </View>
         <TouchableOpacity
           style={styles.clearButton}
@@ -451,7 +488,7 @@ export function AIScreen() {
 
       <KeyboardAvoidingView
         style={styles.chatContainer}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={90}
       >
         <FlatList
@@ -530,6 +567,14 @@ export function AIScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+
+      {/* 🔒 HIPAA COMPLIANT: AI Consent Modal */}
+      <AIConsentModal
+        visible={showModal}
+        onConsent={updateConsent}
+        onClose={hideConsentModal}
+        userId={userId}
+      />
     </SafeAreaView>
   );
 }
@@ -540,13 +585,18 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.background,
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.gray200,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
   },
   headerTitle: {
     fontSize: TYPOGRAPHY.sizes.xl,
@@ -574,19 +624,19 @@ const styles = StyleSheet.create({
   timestamp: {
     fontSize: TYPOGRAPHY.sizes.xs,
     color: COLORS.textTertiary,
-    textAlign: "center",
+    textAlign: 'center',
     marginVertical: SPACING.md,
   },
   messageBubble: {
-    flexDirection: "row",
-    alignItems: "flex-end",
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     marginVertical: SPACING.xs,
   },
   userBubble: {
-    justifyContent: "flex-end",
+    justifyContent: 'flex-end',
   },
   assistantBubble: {
-    justifyContent: "flex-start",
+    justifyContent: 'flex-start',
   },
   avatarContainer: {
     marginRight: SPACING.sm,
@@ -596,11 +646,11 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   bubbleContent: {
-    maxWidth: "75%",
+    maxWidth: '75%',
     borderRadius: 20,
     padding: SPACING.md,
   },
@@ -623,13 +673,13 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
   },
   sourcesContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: SPACING.sm,
     gap: SPACING.xs,
   },
   sourceBadge: {
-    backgroundColor: "rgba(0,0,0,0.1)",
+    backgroundColor: 'rgba(0,0,0,0.1)',
     paddingHorizontal: SPACING.sm,
     paddingVertical: 2,
     borderRadius: 12,
@@ -639,13 +689,13 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   quickActionsContainer: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: SPACING.sm,
     gap: SPACING.xs,
   },
   quickActionButton: {
-    backgroundColor: COLORS.primary + "20",
+    backgroundColor: COLORS.primary + '20',
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: 16,
@@ -656,20 +706,20 @@ const styles = StyleSheet.create({
     fontWeight: TYPOGRAPHY.weights.medium,
   },
   typingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     marginVertical: SPACING.sm,
   },
   typingBubble: {
     backgroundColor: COLORS.backgroundSecondary,
     borderRadius: 20,
     padding: SPACING.md,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   typingIndicator: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
   },
   typingDot: {
@@ -692,8 +742,8 @@ const styles = StyleSheet.create({
     padding: SPACING.md,
     borderRadius: 12,
     marginBottom: SPACING.sm,
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   suggestionIcon: {
     marginRight: SPACING.sm,
@@ -704,13 +754,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   inputContainer: {
-    flexDirection: "row",
+    flexDirection: 'row',
     paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     backgroundColor: COLORS.background,
     borderTopWidth: 1,
     borderTopColor: COLORS.gray200,
-    alignItems: "flex-end",
+    alignItems: 'flex-end',
   },
   textInput: {
     flex: 1,
@@ -728,8 +778,8 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: 22,
     backgroundColor: COLORS.primary,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   sendButtonDisabled: {
     backgroundColor: COLORS.gray300,

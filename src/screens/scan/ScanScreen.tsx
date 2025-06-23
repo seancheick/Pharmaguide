@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { ScanScreenProps } from '../../types/navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, AnimatedTouchable } from '../../components/common';
 import { BarcodeScanner } from './BarcodeScanner';
@@ -21,7 +22,7 @@ import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 type ScanScreenState = 'idle' | 'scanning' | 'processing' | 'results';
 
 export const ScanScreen = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<ScanScreenProps['navigation']>();
   const [screenState, setScreenState] = useState<ScanScreenState>('idle');
   const [product, setProduct] = useState<Product | null>(null);
   const [analysis, setAnalysis] = useState<ProductAnalysis | null>(null);
@@ -70,15 +71,15 @@ export const ScanScreen = () => {
             },
             {
               text: 'Search Manually',
-              onPress: () => navigation.navigate('Search' as never),
+              onPress: () => navigation.navigate('Search'),
             },
             {
               text: 'Scan Label',
-              onPress: () => navigation.navigate('OCR' as never),
+              onPress: () => navigation.navigate('OCR'),
             },
             {
               text: 'Submit Product',
-              onPress: () => navigation.navigate('ProductSubmission' as never),
+              onPress: () => navigation.navigate('ProductSubmission'),
             },
           ]
         );
