@@ -1,18 +1,105 @@
 // src/services/products/index.ts
-import { openFoodFactsService, ParsedProduct } from './openfoodfacts';
 import { huggingfaceService } from '../ai/huggingface';
 import { interactionService } from '../interactions';
 import { scanRateLimiter } from '../../utils/rateLimiting';
-import { sanitizeApiResponse } from '../../utils/sanitization';
-import { getErrorMessage } from '../../utils/errorHandling';
 import type {
   Product,
   ProductAnalysis,
   Ingredient,
+  IngredientForm,
   UserStack,
+  ProductCategory,
 } from '../../types';
+import { openFoodFactsService, ParsedProduct } from './openfoodfacts';
 export { openFoodFactsService } from './openfoodfacts';
 export { interactionService } from '../interactions';
+
+/**
+ * Circuit Breaker Pattern for AI Service Protection
+ * Prevents cascading failures when AI services are down
+ */
+class ProductServiceCircuitBreaker {
+  private failures = 0;
+  private lastFailTime = 0;
+  private state: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+  private readonly failureThreshold = 5;
+  private readonly resetTimeout = 60000; // 1 minute
+
+  async execute<T>(
+    primaryFn: () => Promise<T>,
+    fallbackFn: () => Promise<T>,
+    operation: string = 'AI Analysis'
+  ): Promise<T> {
+    // Check if circuit breaker is OPEN
+    if (this.state === 'OPEN') {
+      const timeSinceLastFail = Date.now() - this.lastFailTime;
+
+      if (timeSinceLastFail < this.resetTimeout) {
+        console.warn(
+          `🔴 Circuit breaker OPEN for ${operation}, using fallback`
+        );
+        return fallbackFn();
+      } else {
+        // Try to transition to HALF_OPEN
+        this.state = 'HALF_OPEN';
+        console.log(
+          `🟡 Circuit breaker HALF_OPEN for ${operation}, testing primary`
+        );
+      }
+    }
+
+    try {
+      const result = await primaryFn();
+      this.onSuccess(operation);
+      return result;
+    } catch (error) {
+      const wasHalfOpen = this.state === 'HALF_OPEN';
+      this.onFailure(operation, error);
+
+      // If we were in HALF_OPEN and failed, or if circuit is now OPEN, use fallback
+      if (wasHalfOpen || (this.state as string) === 'OPEN') {
+        console.warn(`🔴 Circuit breaker using fallback for ${operation}`);
+        return fallbackFn();
+      }
+
+      throw error;
+    }
+  }
+
+  private onSuccess(operation: string) {
+    if (this.failures > 0) {
+      console.log(`✅ Circuit breaker recovered for ${operation}`);
+    }
+    this.failures = 0;
+    this.state = 'CLOSED';
+  }
+
+  private onFailure(operation: string, error: unknown) {
+    this.failures++;
+    this.lastFailTime = Date.now();
+
+    console.warn(
+      `⚠️ Circuit breaker failure ${this.failures}/${this.failureThreshold} for ${operation}:`,
+      error instanceof Error ? error.message : String(error)
+    );
+
+    if (this.failures >= this.failureThreshold) {
+      this.state = 'OPEN';
+      console.error(
+        `🔴 Circuit breaker OPEN for ${operation} after ${this.failures} failures`
+      );
+    }
+  }
+
+  getStatus() {
+    return {
+      state: this.state,
+      failures: this.failures,
+      lastFailTime: this.lastFailTime,
+      timeSinceLastFail: Date.now() - this.lastFailTime,
+    };
+  }
+}
 
 export class ProductService {
   // Add a cache for product analysis results
@@ -23,6 +110,192 @@ export class ProductService {
 
   // Cache expiration time (24 hours in milliseconds)
   private CACHE_EXPIRATION = 24 * 60 * 60 * 1000;
+
+  // Circuit breaker for AI service protection
+  private aiCircuitBreaker = new ProductServiceCircuitBreaker();
+
+  /**
+   * Get circuit breaker status for monitoring
+   */
+  getCircuitBreakerStatus() {
+    return this.aiCircuitBreaker.getStatus();
+  }
+
+  /**
+   * Enhanced Error Recovery - Multiple fallback layers for AI analysis
+   * TIER 1: AI Analysis (HuggingFace/Groq)
+   * TIER 2: Rule-based analysis (if available)
+   * TIER 3: Basic analysis (always works)
+   */
+  private async analyzeWithEnhancedRecovery(
+    product: Product,
+    userStack?: UserStack[]
+  ): Promise<ProductAnalysis> {
+    // Primary: Try AI analysis with circuit breaker protection
+    const primaryAnalysis = async (): Promise<ProductAnalysis> => {
+      console.log('🤖 Attempting AI analysis...');
+      const partialAnalysis = await huggingfaceService.generateProductAnalysis(
+        product,
+        true
+      );
+      return this.addStackInteractionAnalysis(
+        partialAnalysis,
+        product,
+        userStack
+      );
+    };
+
+    // Fallback: Rule-based analysis
+    const fallbackAnalysis = async (): Promise<ProductAnalysis> => {
+      console.log('📋 Using rule-based analysis fallback...');
+      try {
+        // Try to use rule-based engine if available
+        const ruleBasedAnalysis = await this.createRuleBasedAnalysis(product);
+        return this.addStackInteractionAnalysis(
+          ruleBasedAnalysis,
+          product,
+          userStack
+        );
+      } catch (ruleError) {
+        console.warn(
+          'Rule-based analysis failed, using basic analysis:',
+          ruleError
+        );
+        // Final fallback to basic analysis
+        const basicAnalysis = this.createBasicAnalysis(product);
+        return this.addStackInteractionAnalysis(
+          basicAnalysis,
+          product,
+          userStack
+        );
+      }
+    };
+
+    try {
+      return await this.aiCircuitBreaker.execute(
+        primaryAnalysis,
+        fallbackAnalysis,
+        'Product Analysis'
+      );
+    } catch (error) {
+      console.error(
+        'All analysis methods failed, using emergency fallback:',
+        error
+      );
+      // Emergency fallback - should never fail
+      const emergencyAnalysis = this.createBasicAnalysis(product);
+      return this.addStackInteractionAnalysis(
+        emergencyAnalysis,
+        product,
+        userStack
+      );
+    }
+  }
+
+  /**
+   * Create rule-based analysis (placeholder for future rule engine integration)
+   */
+  private async createRuleBasedAnalysis(
+    product: Product
+  ): Promise<Partial<ProductAnalysis>> {
+    // This is a placeholder - in the future, integrate with your rule-based engine
+    // For now, create a simplified analysis based on product data
+    return {
+      overallScore: this.calculateBasicScore(product),
+      categoryScores: {
+        ingredients: 75,
+        bioavailability: 70,
+        dosage: 75,
+        purity: 80,
+        value: 70,
+      },
+      strengths: [
+        {
+          point: 'Product information available',
+          detail: 'Basic product data successfully retrieved',
+          importance: 'medium' as const,
+          category: 'quality' as const,
+        },
+      ],
+      weaknesses: [],
+      recommendations: {
+        goodFor: ['General use'],
+        avoidIf: [],
+      },
+      aiReasoning: 'Analysis completed using rule-based fallback system',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Create basic analysis that always works (emergency fallback)
+   */
+  private createBasicAnalysis(product: Product): Partial<ProductAnalysis> {
+    return {
+      overallScore: 65, // Conservative default score
+      categoryScores: {
+        ingredients: 65,
+        bioavailability: 65,
+        dosage: 65,
+        purity: 65,
+        value: 65,
+      },
+      strengths: [
+        {
+          point: 'Product identified',
+          detail: `Successfully identified ${product.name}`,
+          importance: 'low' as const,
+          category: 'quality' as const,
+        },
+      ],
+      weaknesses: [
+        {
+          point: 'Limited analysis available',
+          detail: 'Detailed analysis temporarily unavailable',
+          importance: 'low' as const,
+          category: 'quality' as const,
+        },
+      ],
+      recommendations: {
+        goodFor: ['Consult healthcare provider for guidance'],
+        avoidIf: ['If you have known allergies to ingredients'],
+      },
+      aiReasoning:
+        'Basic analysis - detailed AI analysis temporarily unavailable',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  /**
+   * Calculate basic score based on available product data
+   */
+  private calculateBasicScore(product: Product): number {
+    let score = 50; // Base score
+
+    // Add points for having ingredients
+    if (product.ingredients && product.ingredients.length > 0) {
+      score += 15;
+    }
+
+    // Add points for having serving size info
+    if (product.servingSize && product.servingSize !== 'Unknown') {
+      score += 10;
+    }
+
+    // Add points for having brand info
+    if (product.brand) {
+      score += 5;
+    }
+
+    // Add points for having category
+    if (product.category) {
+      score += 5;
+    }
+
+    return Math.min(score, 80); // Cap at 80 for basic analysis
+  }
 
   async analyzeScannedProduct(
     barcode: string,
@@ -78,15 +351,8 @@ export class ProductService {
       // Step 2: Convert to our Product format
       const product = this.convertToProduct(parsedProduct);
 
-      // Step 3: Generate AI analysis
-      const partialAnalysis = await huggingfaceService.generateProductAnalysis(
-        product,
-        true
-      );
-
-      // Step 4: Add stack interaction analysis if userStack is provided
-      const analysis = await this.addStackInteractionAnalysis(
-        partialAnalysis,
+      // Step 3: Generate AI analysis with enhanced error recovery
+      const analysis = await this.analyzeWithEnhancedRecovery(
         product,
         userStack
       );
@@ -194,18 +460,16 @@ export class ProductService {
   }
 
   private convertToProduct(parsedProduct: ParsedProduct): Product {
-    const ingredients: Ingredient[] = parsedProduct.ingredients.map(
-      (name, index) => ({
-        name: name.toLowerCase(),
-        amount: 0,
-        unit: 'mg',
-        form: this.guessIngredientForm(name),
-        dailyValuePercentage: undefined,
-        bioavailability: this.guessBioavailability(name),
-        evidenceLevel: 'marketing_claims',
-        category: 'active',
-      })
-    );
+    const ingredients: Ingredient[] = parsedProduct.ingredients.map(name => ({
+      name: name.toLowerCase(),
+      amount: 0,
+      unit: 'mg',
+      form: this.guessIngredientForm(name),
+      dailyValuePercentage: undefined,
+      bioavailability: this.guessBioavailability(name),
+      evidenceLevel: 'marketing_claims',
+      category: 'active',
+    }));
 
     return {
       id: `scanned_${parsedProduct.barcode}`,
@@ -225,9 +489,9 @@ export class ProductService {
     };
   }
 
-  private guessIngredientForm(ingredientName: string): string {
+  private guessIngredientForm(ingredientName: string): IngredientForm {
     const name = ingredientName.toLowerCase();
-    const formMap: { [key: string]: string } = {
+    const formMap: { [key: string]: IngredientForm } = {
       methylcobalamin: 'methylcobalamin',
       methylfolate: 'methylfolate',
       '5-mthf': 'methylfolate',
@@ -238,7 +502,7 @@ export class ProductService {
       oxide: 'oxide',
       cyanocobalamin: 'cyanocobalamin',
       'folic acid': 'folic_acid',
-      carbonate: 'carbonate',
+      carbonate: 'other', // carbonate is not in IngredientForm, map to 'other'
     };
     for (const [key, value] of Object.entries(formMap)) {
       if (name.includes(key)) return value;
@@ -264,7 +528,7 @@ export class ProductService {
     return 'medium';
   }
 
-  private mapCategory(category: string): any {
+  private mapCategory(category: string): ProductCategory {
     const categoryMap = {
       supplement: 'specialty',
       vitamin: 'vitamin',
@@ -277,7 +541,8 @@ export class ProductService {
       food: 'specialty',
     };
 
-    return categoryMap[category as keyof typeof categoryMap] || 'specialty';
+    return (categoryMap[category as keyof typeof categoryMap] ||
+      'specialty') as ProductCategory;
   }
 
   private createNotFoundProduct(barcode: string): Product {

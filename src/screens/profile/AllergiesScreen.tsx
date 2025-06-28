@@ -1,6 +1,6 @@
 // src/screens/profile/AllergiesScreen.tsx
 // 🚀 WORLD-CLASS: Allergies & Sensitivities Selection Screen
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,19 +12,25 @@ import {
   TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { OptimizedIcon } from '../../components/common/OptimizedIcon';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { AllergiesScreenProps } from '../../types/navigation';
+import { storageAdapter } from '../../services/storage/storageAdapter';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
+import type {
+  AllergiesAndSensitivities,
+  Allergy as AllergyType,
+} from '../../types/healthProfile';
 
-interface Allergy {
+interface AllergyOption {
   id: string;
   name: string;
   category: 'food' | 'environmental' | 'medication' | 'supplement';
   severity: 'mild' | 'moderate' | 'severe';
-  icon: keyof typeof MaterialIcons.glyphMap;
+  icon: string; // Use string for compatibility with OptimizedIcon
 }
 
-const COMMON_ALLERGIES: Allergy[] = [
+const COMMON_ALLERGIES: AllergyOption[] = [
   // Food Allergies
   {
     id: 'shellfish',
@@ -140,15 +146,58 @@ const SEVERITY_COLORS = {
 
 export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
   navigation,
+  route,
 }) => {
-  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  // Accept initialValue from navigation params for progress recovery
+  const initialValue = route?.params?.initialValue as {
+    selectedAllergies?: string[];
+    customAllergies?: string[];
+    allAllergies?: string[];
+  } | undefined;
+  const [selectedAllergies, setSelectedAllergies] = useState<string[]>(
+    initialValue?.selectedAllergies || []
+  );
   const [customAllergy, setCustomAllergy] = useState('');
-  const [customAllergies, setCustomAllergies] = useState<string[]>([]);
+  const [customAllergies, setCustomAllergies] = useState<string[]>(
+    initialValue?.customAllergies || []
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const { updateProfile } = useHealthProfile();
+
+  // 💾 Load existing data when component mounts (if not provided by initialValue)
+  useEffect(() => {
+    if (initialValue && (initialValue.selectedAllergies?.length || initialValue.customAllergies?.length)) return;
+    const loadExistingData = async () => {
+      try {
+        // Load from setup data (temporary storage during setup flow)
+        const savedSetupData = await AsyncStorage.getItem(
+          'health_profile_setup_data'
+        );
+        if (savedSetupData) {
+          const setupData = JSON.parse(savedSetupData);
+          if (setupData.allergies) {
+            const { selectedAllergies: saved, customAllergies: savedCustom } =
+              setupData.allergies;
+            if (Array.isArray(saved)) {
+              setSelectedAllergies(saved);
+            }
+            if (Array.isArray(savedCustom)) {
+              setCustomAllergies(savedCustom);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing allergies:', error);
+      }
+    };
+
+    loadExistingData();
+  }, [initialValue]);
 
   // 🔄 Mark step as complete in HealthProfileSetupScreen
   const markStepComplete = async (stepId: string) => {
     try {
-      const savedProgress = await AsyncStorage.getItem(
+      const savedProgress = await storageAdapter.getItem(
         'health_profile_setup_progress'
       );
       if (savedProgress) {
@@ -164,7 +213,7 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
         );
         const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
 
-        await AsyncStorage.setItem(
+        await storageAdapter.setItem(
           'health_profile_setup_progress',
           JSON.stringify({
             currentStep: nextStep,
@@ -204,22 +253,69 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
   const handleSave = async () => {
     const allAllergies = [...selectedAllergies, ...customAllergies];
 
+    setIsLoading(true);
     try {
-      // TODO: Save to profile service
-      console.log('Saving allergies:', allAllergies);
+      console.log('💾 Saving allergies:', {
+        selectedAllergies,
+        customAllergies,
+      });
 
-      // Mark allergies step as complete (final step)
+      // 1. Save to setupData (temporary storage during setup flow)
+      const savedSetupData = await AsyncStorage.getItem(
+        'health_profile_setup_data'
+      );
+      const setupData = savedSetupData ? JSON.parse(savedSetupData) : {};
+      setupData.allergies = {
+        selectedAllergies,
+        customAllergies,
+        allAllergies,
+      };
+      await AsyncStorage.setItem(
+        'health_profile_setup_data',
+        JSON.stringify(setupData)
+      );
+
+      // 2. Transform to AllergiesAndSensitivities interface and save to health profile
+      const allergiesData: AllergiesAndSensitivities = {
+        allergies: allAllergies.map(allergy => ({
+          id: typeof allergy === 'string' ? allergy : allergy,
+          name: typeof allergy === 'string' ? allergy : allergy,
+          type: 'other' as const,
+          severity: 'moderate' as const,
+          reaction: customAllergies.includes(allergy)
+            ? 'Custom allergy'
+            : undefined,
+          confirmed: true,
+        })),
+        consentGiven: true,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      const result = await updateProfile('allergies', allergiesData);
+      if (result.error) {
+        throw new Error(
+          typeof result.error === 'string'
+            ? result.error
+            : 'Failed to save allergies'
+        );
+      }
+
+      console.log('✅ Successfully saved allergies');
+
+      // 3. Mark allergies step as complete (final step)
       await markStepComplete('allergies');
 
       // No success popup here - the HealthProfileSetupScreen will show the final completion popup
       navigation.goBack();
     } catch (error) {
-      console.error('Error saving allergies:', error);
+      console.error('❌ Error saving allergies:', error);
       Alert.alert('Error', 'Failed to save allergies. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const renderAllergyCard = (allergy: Allergy) => {
+  const renderAllergyCard = (allergy: AllergyOption) => {
     const isSelected = selectedAllergies.includes(allergy.id);
     const severityColor = SEVERITY_COLORS[allergy.severity];
 
@@ -237,7 +333,8 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
               isSelected && styles.selectedIconContainer,
             ]}
           >
-            <MaterialIcons
+            <OptimizedIcon
+              type="material"
               name={allergy.icon}
               size={20}
               color={isSelected ? COLORS.white : severityColor}
@@ -268,10 +365,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
             </View>
           </View>
           {isSelected && (
-            <Ionicons
+            <OptimizedIcon
+              type="ion"
               name="checkmark-circle"
               size={20}
               color={COLORS.success}
+              accessibilityLabel="Selected allergy"
             />
           )}
         </View>
@@ -287,7 +386,7 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
       acc[allergy.category].push(allergy);
       return acc;
     },
-    {} as Record<string, Allergy[]>
+    {} as Record<string, AllergyOption[]>
   );
 
   return (
@@ -298,7 +397,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+          <OptimizedIcon
+            type="ion"
+            name="arrow-back"
+            size={24}
+            color={COLORS.textPrimary}
+          />
         </TouchableOpacity>
         <Text style={styles.title}>Allergies</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -309,7 +413,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <Ionicons name="warning" size={32} color={COLORS.error} />
+          <OptimizedIcon
+            type="ion"
+            name="warning"
+            size={32}
+            color={COLORS.error}
+          />
           <Text style={styles.instructionsTitle}>
             Allergies & Sensitivities
           </Text>
@@ -318,7 +427,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
             your safety and helps us avoid recommending harmful supplements.
           </Text>
           <View style={styles.criticalNote}>
-            <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+            <OptimizedIcon
+              type="ion"
+              name="alert-circle"
+              size={16}
+              color={COLORS.error}
+            />
             <Text style={styles.criticalText}>
               Critical safety information - please be thorough
             </Text>
@@ -354,7 +468,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
               onPress={handleAddCustomAllergy}
               disabled={!customAllergy.trim()}
             >
-              <Ionicons name="add" size={20} color={COLORS.white} />
+              <OptimizedIcon
+                type="ion"
+                name="add"
+                size={20}
+                color={COLORS.white}
+              />
             </TouchableOpacity>
           </View>
 
@@ -366,7 +485,12 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
                 onPress={() => handleRemoveCustomAllergy(allergy)}
                 style={styles.removeButton}
               >
-                <Ionicons name="close" size={16} color={COLORS.error} />
+                <OptimizedIcon
+                  type="ion"
+                  name="close"
+                  size={16}
+                  color={COLORS.error}
+                />
               </TouchableOpacity>
             </View>
           ))}
@@ -375,9 +499,22 @@ export const AllergiesScreen: React.FC<AllergiesScreenProps> = ({
 
       {/* Save Button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Allergies</Text>
-          <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+        <TouchableOpacity
+          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={isLoading}
+        >
+          <Text style={styles.saveButtonText}>
+            {isLoading ? 'Saving...' : 'Save Allergies'}
+          </Text>
+          {!isLoading && (
+            <OptimizedIcon
+              type="ion"
+              name="arrow-forward"
+              size={20}
+              color={COLORS.white}
+            />
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -572,6 +709,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: 12,
     gap: SPACING.sm,
+  },
+  saveButtonDisabled: {
+    backgroundColor: COLORS.gray400,
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.sizes.lg,

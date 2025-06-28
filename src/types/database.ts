@@ -1,7 +1,4 @@
-// =====================================================
-// PharmaGuide Database Types
-// Generated from fresh database schema
-// =====================================================
+// src/types/database.ts
 
 // ===== Base Database Types =====
 
@@ -20,28 +17,40 @@ export interface DatabaseProduct {
   id: string;
   barcode: string | null;
   name: string;
+  generic_name: string | null;
   brand: string | null;
+  manufacturer: string | null;
   category: string | null;
+  dosage_form: string | null;
+  strength: string | null;
+  active_ingredients: any | null; // JSONB
+  inactive_ingredients: string[] | null;
   image_url: string | null;
-  ingredients: any | null; // JSONB
   verified: boolean;
+  fda_approved: boolean;
+  otc_status: boolean;
+  warnings: string[] | null;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;
+  search_vector?: any; // tsvector for full-text search
 }
 
 export interface DatabaseUserProfile {
   id: string;
   user_id: string;
-  first_name: string | null;
-  last_name: string | null;
-  age: number | null;
+  display_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
+  date_of_birth: string | null; // date
   gender: string | null;
-  health_goals: string[]; // JSONB array
-  conditions: string[]; // JSONB array
-  allergies: string[]; // JSONB array
-  medications: string[]; // JSONB array
-  genetics: Record<string, any> | null; // JSONB
+  height_cm: number | null;
+  weight_kg: number | null;
+  activity_level: string | null;
+  health_goals: string[] | null; // text[]
+  medical_conditions: string[] | null; // text[]
+  allergies: string[] | null; // text[]
+  medications: string[] | null; // text[]
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

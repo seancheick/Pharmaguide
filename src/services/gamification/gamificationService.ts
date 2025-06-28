@@ -1,7 +1,7 @@
 // src/services/gamification/gamificationService.ts
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "../supabase/client";
-import { GAMIFICATION } from "../../constants";
+import { storageAdapter } from '../storage/storageAdapter';
+import { supabase } from '../supabase/client';
+import { GAMIFICATION } from '../../constants';
 
 interface UserProgress {
   points: number;
@@ -58,15 +58,15 @@ class GamificationService {
       // Fetch from database
       const [pointsData, streakData, statsData] = await Promise.all([
         supabase
-          .from("user_points")
-          .select("total_points, level")
-          .eq("user_id", this.userId)
+          .from('user_points')
+          .select('total_points, level')
+          .eq('user_id', this.userId)
           .single(),
 
         supabase
-          .from("user_streaks")
-          .select("current_streak, longest_streak, last_activity_date")
-          .eq("user_id", this.userId)
+          .from('user_streaks')
+          .select('current_streak, longest_streak, last_activity_date')
+          .eq('user_id', this.userId)
           .single(),
 
         this.getStatisticsFromCache(), // Still use local cache for detailed stats
@@ -89,7 +89,7 @@ class GamificationService {
         statistics: statsData,
       };
     } catch (error) {
-      console.error("Error getting user progress:", error);
+      console.error('Error getting user progress:', error);
       return this.getLocalProgress();
     }
   }
@@ -108,7 +108,7 @@ class GamificationService {
       }
 
       // Use the database function
-      const { data, error } = await supabase.rpc("increment_points", {
+      const { data, error } = await supabase.rpc('increment_points', {
         p_user_id: this.userId,
         p_points: points,
         p_reason: action.toLowerCase(),
@@ -129,7 +129,7 @@ class GamificationService {
 
       return data;
     } catch (error) {
-      console.error("Error awarding points:", error);
+      console.error('Error awarding points:', error);
       // Fallback to local storage
       await this.awardPointsLocally(action, metadata);
       return null;
@@ -144,7 +144,7 @@ class GamificationService {
       }
 
       // Use the database function
-      const { data, error } = await supabase.rpc("update_streak", {
+      const { data, error } = await supabase.rpc('update_streak', {
         p_user_id: this.userId,
       });
 
@@ -157,7 +157,7 @@ class GamificationService {
 
       return data;
     } catch (error) {
-      console.error("Error updating streak:", error);
+      console.error('Error updating streak:', error);
       return await this.updateStreakLocally();
     }
   }
@@ -167,16 +167,16 @@ class GamificationService {
 
     try {
       const { data, error } = await supabase
-        .from("points_history")
-        .select("*")
-        .eq("user_id", this.userId)
-        .order("created_at", { ascending: false })
+        .from('points_history')
+        .select('*')
+        .eq('user_id', this.userId)
+        .order('created_at', { ascending: false })
         .limit(limit);
 
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error("Error getting points history:", error);
+      console.error('Error getting points history:', error);
       return [];
     }
   }
@@ -184,7 +184,8 @@ class GamificationService {
   // Local storage methods for anonymous users
   private async getLocalProgress(): Promise<UserProgress> {
     try {
-      const stored = await AsyncStorage.getItem("user_progress");
+      await storageAdapter.initialize();
+      const stored = await storageAdapter.getItem('user_progress');
       if (stored) {
         const progress = JSON.parse(stored);
         progress.levelTitle = this.getLevelTitle(progress.points);
@@ -192,7 +193,7 @@ class GamificationService {
       }
       return this.getDefaultProgress();
     } catch (error) {
-      console.error("Error getting local progress:", error);
+      console.error('Error getting local progress:', error);
       return this.getDefaultProgress();
     }
   }
@@ -212,16 +213,16 @@ class GamificationService {
       await this.updateStatistics(action, metadata);
       await this.checkAchievements();
 
-      await AsyncStorage.setItem("user_progress", JSON.stringify(progress));
+      await storageAdapter.setItem('user_progress', JSON.stringify(progress));
     } catch (error) {
-      console.error("Error awarding points locally:", error);
+      console.error('Error awarding points locally:', error);
     }
   }
 
   private async updateStreakLocally(): Promise<StreakResult> {
     try {
       const progress = await this.getLocalProgress();
-      const today = new Date().toISOString().split("T")[0];
+      const today = new Date().toISOString().split('T')[0];
       const lastActivity = progress.streak.lastActivityDate;
 
       if (lastActivity === today) {
@@ -231,13 +232,13 @@ class GamificationService {
           longest_streak: progress.streak.longest,
           streak_continued: false,
           streak_broken: false,
-          message: "Already updated today",
+          message: 'Already updated today',
         };
       }
 
       const yesterday = new Date();
       yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayStr = yesterday.toISOString().split("T")[0];
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
 
       let streakContinued = false;
       let streakBroken = false;
@@ -256,7 +257,7 @@ class GamificationService {
       );
       progress.streak.lastActivityDate = today;
 
-      await AsyncStorage.setItem("user_progress", JSON.stringify(progress));
+      await storageAdapter.setItem('user_progress', JSON.stringify(progress));
 
       return {
         success: true,
@@ -266,7 +267,7 @@ class GamificationService {
         streak_broken: streakBroken,
       };
     } catch (error) {
-      console.error("Error updating streak locally:", error);
+      console.error('Error updating streak locally:', error);
       return {
         success: false,
         current_streak: 0,
@@ -294,36 +295,36 @@ class GamificationService {
       const stats = await this.getStatisticsFromCache();
 
       switch (action) {
-        case "DAILY_SCAN":
+        case 'DAILY_SCAN':
           stats.totalScans += 1;
           break;
-        case "SAFE_PRODUCT":
+        case 'SAFE_PRODUCT':
           stats.safeProducts += 1;
           break;
-        case "INTERACTION_FOUND":
+        case 'INTERACTION_FOUND':
           stats.interactionsFound += 1;
           break;
-        case "SUBMISSION":
+        case 'SUBMISSION':
           if (metadata?.approved) {
             stats.submissionsApproved += 1;
           }
           break;
       }
 
-      await AsyncStorage.setItem("user_statistics", JSON.stringify(stats));
+      await storageAdapter.setItem('user_statistics', JSON.stringify(stats));
     } catch (error) {
-      console.error("Error updating statistics:", error);
+      console.error('Error updating statistics:', error);
     }
   }
 
   private async getStatisticsFromCache() {
     try {
-      const stored = await AsyncStorage.getItem("user_statistics");
+      const stored = await storageAdapter.getItem('user_statistics');
       if (stored) {
         return JSON.parse(stored);
       }
     } catch (error) {
-      console.error("Error getting statistics:", error);
+      console.error('Error getting statistics:', error);
     }
 
     return {
@@ -336,12 +337,12 @@ class GamificationService {
 
   private async getAchievements(): Promise<string[]> {
     try {
-      const stored = await AsyncStorage.getItem("user_achievements");
+      const stored = await storageAdapter.getItem('user_achievements');
       if (stored) {
         return JSON.parse(stored);
       }
     } catch (error) {
-      console.error("Error getting achievements:", error);
+      console.error('Error getting achievements:', error);
     }
     return [];
   }
@@ -354,43 +355,43 @@ class GamificationService {
     // Scan milestones
     if (
       progress.statistics.totalScans >= 10 &&
-      !currentAchievements.includes("FIRST_10_SCANS")
+      !currentAchievements.includes('FIRST_10_SCANS')
     ) {
-      newAchievements.push("FIRST_10_SCANS");
+      newAchievements.push('FIRST_10_SCANS');
     }
     if (
       progress.statistics.totalScans >= 100 &&
-      !currentAchievements.includes("SCAN_MASTER")
+      !currentAchievements.includes('SCAN_MASTER')
     ) {
-      newAchievements.push("SCAN_MASTER");
+      newAchievements.push('SCAN_MASTER');
     }
 
     // Level achievements
-    if (progress.level >= 5 && !currentAchievements.includes("LEVEL_5")) {
-      newAchievements.push("LEVEL_5");
+    if (progress.level >= 5 && !currentAchievements.includes('LEVEL_5')) {
+      newAchievements.push('LEVEL_5');
     }
-    if (progress.level >= 10 && !currentAchievements.includes("LEVEL_10")) {
-      newAchievements.push("LEVEL_10");
+    if (progress.level >= 10 && !currentAchievements.includes('LEVEL_10')) {
+      newAchievements.push('LEVEL_10');
     }
 
     // Safety achievements
     if (
       progress.statistics.interactionsFound >= 10 &&
-      !currentAchievements.includes("SAFETY_GUARDIAN")
+      !currentAchievements.includes('SAFETY_GUARDIAN')
     ) {
-      newAchievements.push("SAFETY_GUARDIAN");
+      newAchievements.push('SAFETY_GUARDIAN');
     }
 
     // Save new achievements
     if (newAchievements.length > 0) {
       const allAchievements = [...currentAchievements, ...newAchievements];
-      await AsyncStorage.setItem(
-        "user_achievements",
+      await storageAdapter.setItem(
+        'user_achievements',
         JSON.stringify(allAchievements)
       );
 
       // Trigger achievement notifications
-      newAchievements.forEach((achievement) => {
+      newAchievements.forEach(achievement => {
         this.onAchievementUnlocked?.(achievement);
       });
     }
@@ -400,24 +401,24 @@ class GamificationService {
     const achievements = await this.getAchievements();
     const newAchievements: string[] = [];
 
-    if (currentStreak >= 7 && !achievements.includes("WEEK_WARRIOR")) {
-      newAchievements.push("WEEK_WARRIOR");
+    if (currentStreak >= 7 && !achievements.includes('WEEK_WARRIOR')) {
+      newAchievements.push('WEEK_WARRIOR');
     }
-    if (currentStreak >= 30 && !achievements.includes("MONTHLY_CHAMPION")) {
-      newAchievements.push("MONTHLY_CHAMPION");
+    if (currentStreak >= 30 && !achievements.includes('MONTHLY_CHAMPION')) {
+      newAchievements.push('MONTHLY_CHAMPION');
     }
-    if (currentStreak >= 100 && !achievements.includes("CENTURY_LEGEND")) {
-      newAchievements.push("CENTURY_LEGEND");
+    if (currentStreak >= 100 && !achievements.includes('CENTURY_LEGEND')) {
+      newAchievements.push('CENTURY_LEGEND');
     }
 
     if (newAchievements.length > 0) {
       const allAchievements = [...achievements, ...newAchievements];
-      await AsyncStorage.setItem(
-        "user_achievements",
+      await storageAdapter.setItem(
+        'user_achievements',
         JSON.stringify(allAchievements)
       );
 
-      newAchievements.forEach((achievement) => {
+      newAchievements.forEach(achievement => {
         this.onAchievementUnlocked?.(achievement);
       });
     }

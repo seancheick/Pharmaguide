@@ -157,10 +157,16 @@ export const WelcomeScreen = () => {
   };
 
   const handleGuestMode = async () => {
+    // Prevent multiple rapid presses
+    if (loading) return;
+
     setLoading(true);
     try {
+      console.log('🎭 Starting guest authentication...');
       await signInAnonymously();
+      console.log('✅ Guest authentication completed');
     } catch (error: any) {
+      console.error('❌ Guest authentication failed:', error);
       Alert.alert(
         'Error',
         error.message || 'Could not continue as guest. Please try again.'

@@ -1,6 +1,6 @@
 // src/screens/profile/ProfileScreen.tsx
 // 🚀 WORLD-CLASS: Complete Profile Management Hub
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,9 +11,8 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
-// Remove AsyncStorage import - no longer needed for progress tracking
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { OptimizedIcon } from '../../components/common/OptimizedIcon';
 import { useAuth } from '../../hooks/useAuth';
 import { useHealthProfile } from '../../hooks/useHealthProfile';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
@@ -43,12 +42,30 @@ export const ProfileScreen = () => {
   } = useAuth();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
-  const { completeness, loading: profileLoading } = useHealthProfile();
-  // Remove locking state - all sections are freely accessible
+  const {
+    completeness,
+    loading: profileLoading,
+    refreshProfile,
+  } = useHealthProfile();
 
-  // Remove all progress tracking logic - sections are freely accessible
+  // Refresh profile when screen comes into focus to sync with HealthProfileSetupScreen
+  useFocusEffect(
+    useCallback(() => {
+      console.log('📋 ProfileScreen - Refreshing profile on focus...');
+      refreshProfile();
+    }, [refreshProfile])
+  );
 
-  // Remove all completion and progress tracking functions
+  // Debug profile data
+  React.useEffect(() => {
+    console.log('📋 ProfileScreen - Profile Debug:', {
+      completeness,
+      profileLoading,
+      authLoading,
+      isAuthenticated,
+      userId: user?.id,
+    });
+  }, [completeness, profileLoading, authLoading, isAuthenticated, user?.id]);
 
   // Enhance profile sections with dynamic data
   const mainSections = PROFILE_SECTIONS.map((section: ProfileSectionGroup) => ({
@@ -126,10 +143,12 @@ export const ProfileScreen = () => {
               { backgroundColor: `${section.color}20` },
             ]}
           >
-            <Ionicons
-              name={section.icon as keyof typeof Ionicons.glyphMap}
+            <OptimizedIcon
+              type="ion"
+              name={section.icon}
               size={28}
               color={section.color}
+              accessibilityLabel={`${section.title} icon`}
             />
           </View>
           <View style={styles.sectionInfo}>
@@ -158,10 +177,12 @@ export const ProfileScreen = () => {
               </View>
             )}
           </View>
-          <Ionicons
+          <OptimizedIcon
+            type="ion"
             name="chevron-forward"
             size={24}
             color={COLORS.textSecondary}
+            accessibilityLabel="Go to section"
           />
         </View>
       </TouchableOpacity>
@@ -180,7 +201,13 @@ export const ProfileScreen = () => {
               onPress={handleSignOut}
               style={styles.signOutButton}
             >
-              <Ionicons name="log-out-outline" size={24} color={COLORS.error} />
+              <OptimizedIcon
+                type="ion"
+                name="log-out-outline"
+                size={24}
+                color={COLORS.error}
+                accessibilityLabel="Sign out"
+              />
             </TouchableOpacity>
           )}
         </View>
@@ -190,10 +217,12 @@ export const ProfileScreen = () => {
           <View style={styles.userCard}>
             <View style={styles.userInfo}>
               <View style={styles.avatar}>
-                <Ionicons
+                <OptimizedIcon
+                  type="ion"
                   name="person-circle"
                   size={50}
                   color={COLORS.primary}
+                  accessibilityLabel="User avatar"
                 />
               </View>
               <View style={styles.userDetails}>
@@ -209,7 +238,13 @@ export const ProfileScreen = () => {
         {/* Guest User Banner */}
         {isGuest && (
           <View style={styles.guestBanner}>
-            <Ionicons name="information-circle" size={20} color={COLORS.info} />
+            <OptimizedIcon
+              type="ion"
+              name="information-circle"
+              size={20}
+              color={COLORS.info}
+              accessibilityLabel="Information"
+            />
             <Text style={styles.guestText}>
               Sign in to save your profile and get personalized recommendations
             </Text>

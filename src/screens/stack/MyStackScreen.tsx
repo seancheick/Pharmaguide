@@ -10,9 +10,15 @@ import {
   Alert,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { StackScreenProps } from '../../types/navigation';
+import {
+  StackEmptyState,
+  LoadingFailedEmptyState,
+} from '../../components/common/EmptyState';
+import { useToast } from '../../hooks/useToast';
 import { useStackStore } from '../../stores/stackStore';
 import { useStackAnalysis } from '../../hooks/useStackAnalysis';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
@@ -30,6 +36,7 @@ import type { UserStack } from '../../types';
 
 export function MyStackScreen() {
   const navigation = useNavigation<StackScreenProps['navigation']>();
+  const { showSuccess, showError } = useToast();
   const {
     stack,
     removeFromStack,
@@ -37,6 +44,7 @@ export function MyStackScreen() {
     loadStack,
     initialized,
     loading: storeLoading,
+    error: storeError,
   } = useStackStore();
 
   // Use our new analysis hook
@@ -75,12 +83,12 @@ export function MyStackScreen() {
     async (itemId: string, updates: Partial<UserStack>) => {
       try {
         await updateStack(itemId, updates);
-        Alert.alert('Success', 'Item updated successfully');
+        showSuccess('Item updated successfully');
       } catch (error: any) {
-        Alert.alert('Error', error.message || 'Failed to update item');
+        showError(error.message || 'Failed to update item');
       }
     },
-    [updateStack]
+    [updateStack, showSuccess, showError]
   );
 
   const handleRemoveItem = useCallback(
@@ -96,9 +104,9 @@ export function MyStackScreen() {
             onPress: async () => {
               try {
                 await removeFromStack(itemToRemove.id);
+                showSuccess(`${itemToRemove.name} removed from stack`);
               } catch (error: any) {
-                Alert.alert(
-                  'Removal Failed',
+                showError(
                   error.message || 'Could not remove item. Please try again.'
                 );
               }
@@ -107,8 +115,8 @@ export function MyStackScreen() {
         ]
       );
     },
-    [removeFromStack]
-  ); // Depend on removeFromStack
+    [removeFromStack, showSuccess, showError]
+  );
 
   const handleRemoveItemFromModal = useCallback(
     async (itemId: string) => {
@@ -161,9 +169,23 @@ export function MyStackScreen() {
     [initialized, analyzing]
   );
 
+  // Handle retry for loading errors
+  const handleRetryLoad = useCallback(async () => {
+    try {
+      await loadStack();
+    } catch (error: any) {
+      showError('Failed to load stack. Please try again.');
+    }
+  }, [loadStack, showError]);
+
   return (
-    <View style={styles.container}>
-      {isLoading ? (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {storeError ? (
+        <LoadingFailedEmptyState
+          onRetry={handleRetryLoad}
+          error="Failed to load your stack"
+        />
+      ) : isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>
@@ -227,28 +249,29 @@ export function MyStackScreen() {
 
           <View style={styles.section}>
             {filteredAndSortedStack.length === 0 ? (
-              <View style={styles.emptyState}>
-                <MaterialIcons
-                  name="inventory"
-                  size={48}
-                  color={COLORS.textSecondary}
+              stack.length === 0 ? (
+                <StackEmptyState
+                  onAddItem={() => navigation.navigate('Scan')}
+                  onLearnMore={() => navigation.navigate('HelpScreen')}
                 />
-                <Text style={styles.emptyText}>
-                  {stack.length === 0
-                    ? 'Your stack is empty'
-                    : 'No items match your filter'}
-                </Text>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => navigation.navigate('Scan')}
-                >
-                  <Text style={styles.addButtonText}>
-                    {stack.length === 0
-                      ? 'Add Your First Item'
-                      : 'Add More Items'}
+              ) : (
+                <View style={styles.emptyState}>
+                  <MaterialIcons
+                    name="filter-list"
+                    size={48}
+                    color={COLORS.textSecondary}
+                  />
+                  <Text style={styles.emptyText}>
+                    No items match your current filter
                   </Text>
-                </TouchableOpacity>
-              </View>
+                  <TouchableOpacity
+                    style={styles.addButton}
+                    onPress={() => setFilterBy('all')}
+                  >
+                    <Text style={styles.addButtonText}>Clear Filter</Text>
+                  </TouchableOpacity>
+                </View>
+              )
             ) : (
               <View style={styles.stackList}>
                 {filteredAndSortedStack.map(item => (
@@ -287,7 +310,7 @@ export function MyStackScreen() {
         onUpdate={handleUpdateItem}
         onRemove={handleRemoveItemFromModal}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -298,7 +321,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flexGrow: 1,
-    paddingTop: SPACING.md, // Add some top padding
+    // SafeAreaView now handles top padding
   },
   safetyAlert: {
     flexDirection: 'row',

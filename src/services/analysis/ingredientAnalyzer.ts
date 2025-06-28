@@ -1,5 +1,6 @@
 // src/services/analysis/ingredientAnalyzer.ts
 // Comprehensive Ingredient-Level Analysis System
+// my old ingredient analyzer before your enhanced one
 
 export interface IngredientProfile {
   name: string;
@@ -165,7 +166,7 @@ export class IngredientAnalyzer {
    * Analyze multiple ingredients for synergies and conflicts
    */
   analyzeIngredientCombination(
-    ingredients: Array<{ name: string; amount: number; unit: string }>,
+    ingredients: { name: string; amount: number; unit: string }[],
     demographics?: DemographicFactors
   ): {
     individualAnalyses: IngredientAnalysisResult[];
@@ -960,13 +961,13 @@ export class IngredientAnalyzer {
   }
 
   private identifySynergies(
-    ingredients: Array<{ name: string; amount: number; unit: string }>
+    ingredients: { name: string; amount: number; unit: string }[]
   ): string[] {
     return [];
   }
 
   private identifyConflicts(
-    ingredients: Array<{ name: string; amount: number; unit: string }>
+    ingredients: { name: string; amount: number; unit: string }[]
   ): string[] {
     return [];
   }

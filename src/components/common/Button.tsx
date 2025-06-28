@@ -1,6 +1,6 @@
 // src/components/common/Button.tsx
 
-import React from "react";
+import React from 'react';
 import {
   TouchableOpacity,
   Text,
@@ -8,14 +8,19 @@ import {
   ActivityIndicator,
   ViewStyle,
   TextStyle,
-} from "react-native";
-import { COLORS, SPACING, TYPOGRAPHY } from "../../constants";
+} from 'react-native';
+import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import {
+  createAccessibleButtonProps,
+  useAccessibility,
+  AccessibilityHelpers,
+} from '../../utils/accessibility';
 
 interface ButtonProps {
   title: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "outline" | "ghost";
-  size?: "small" | "medium" | "large";
+  variant?: 'primary' | 'secondary' | 'outline' | 'ghost';
+  size?: 'small' | 'medium' | 'large';
   loading?: boolean;
   disabled?: boolean;
   style?: ViewStyle;
@@ -26,14 +31,21 @@ interface ButtonProps {
 export const Button: React.FC<ButtonProps> = ({
   title,
   onPress,
-  variant = "primary",
-  size = "medium",
+  variant = 'primary',
+  size = 'medium',
   loading = false,
   disabled = false,
   style,
   textStyle,
   icon,
 }) => {
+  const { isReduceMotionEnabled } = useAccessibility();
+  const accessibilityProps = createAccessibleButtonProps(
+    title,
+    loading ? 'Loading, please wait' : undefined,
+    disabled || loading
+  );
+
   const buttonStyle = [
     styles.base,
     styles[variant],
@@ -44,16 +56,27 @@ export const Button: React.FC<ButtonProps> = ({
 
   const textColorStyle = [styles.text, styles[`${variant}Text`], textStyle];
 
+  // Ensure minimum touch target size for accessibility
+  const minTouchTarget = AccessibilityHelpers.getMinTouchTargetSize();
+  const accessibleStyle = {
+    minWidth: minTouchTarget.width,
+    minHeight: Math.max(
+      minTouchTarget.height,
+      buttonStyle.find(s => s?.minHeight)?.minHeight || 0
+    ),
+  };
+
   return (
     <TouchableOpacity
-      style={buttonStyle}
+      style={[buttonStyle, accessibleStyle]}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.8}
+      activeOpacity={isReduceMotionEnabled ? 1 : 0.8}
+      {...accessibilityProps}
     >
       {loading ? (
         <ActivityIndicator
-          color={variant === "primary" ? COLORS.background : COLORS.primary}
+          color={variant === 'primary' ? COLORS.background : COLORS.primary}
         />
       ) : (
         <>
@@ -67,9 +90,9 @@ export const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   base: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 12,
     paddingHorizontal: SPACING.md,
   },
@@ -82,12 +105,12 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.secondary,
   },
   outline: {
-    backgroundColor: "transparent",
+    backgroundColor: 'transparent',
     borderWidth: 2,
     borderColor: COLORS.primary,
   },
   ghost: {
-    backgroundColor: "transparent",
+    backgroundColor: 'transparent',
   },
 
   // Sizes

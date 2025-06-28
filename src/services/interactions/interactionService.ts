@@ -14,6 +14,12 @@ import type {
   NutrientWarning,
 } from '../../types';
 import type { HealthProfile } from '../../hooks/useHealthProfile';
+import type { CitationSource } from '../../components/compliance';
+import {
+  FDA_COMPLIANCE,
+  createFDASource,
+  createNIHSource,
+} from '../../components/compliance';
 
 // Import enhanced interaction system
 import {
@@ -625,6 +631,78 @@ export class InteractionService {
    */
   isEnhancedAnalysisAvailable(): boolean {
     return this.enhancedInitialized;
+  }
+
+  /**
+   * Enhance interaction results with FDA compliance information
+   */
+  private enhanceWithFDACompliance(
+    result: StackInteractionResult
+  ): StackInteractionResult & {
+    fdaCompliance: { disclaimer: string; sources: CitationSource[] };
+  } {
+    const sources: CitationSource[] = [
+      createFDASource(
+        'FDA Drug Interactions Database',
+        'https://www.fda.gov/drugs/drug-interactions-labeling',
+        2024,
+        'Official FDA guidance on drug and supplement interactions'
+      ),
+      createNIHSource(
+        'NIH Dietary Supplement Interactions',
+        'https://ods.od.nih.gov/factsheets/DietarySupplements-HealthProfessional/',
+        2024,
+        'Comprehensive database of supplement interaction research'
+      ),
+    ];
+
+    // Add specific sources for detected interactions
+    if (result.interactions && result.interactions.length > 0) {
+      result.interactions.forEach(interaction => {
+        if (
+          interaction.severity === 'HIGH' ||
+          interaction.severity === 'CRITICAL'
+        ) {
+          sources.push({
+            id: `interaction_${interaction.id}`,
+            title: `Clinical Evidence: ${interaction.description}`,
+            source: 'PubMed',
+            evidenceLevel: 'B',
+            description: `Research supporting this ${interaction.severity.toLowerCase()} interaction`,
+          });
+        }
+      });
+    }
+
+    const disclaimer = `${FDA_COMPLIANCE.DISCLAIMERS.EDUCATIONAL_ONLY} This interaction analysis is based on available research and may not identify all potential interactions. ${FDA_COMPLIANCE.DISCLAIMERS.INDIVIDUAL_VARIATION} ${FDA_COMPLIANCE.DISCLAIMERS.CONSULT_PROVIDER}`;
+
+    return {
+      ...result,
+      fdaCompliance: {
+        disclaimer,
+        sources,
+      },
+    };
+  }
+
+  /**
+   * Check interactions with FDA compliance information
+   */
+  async checkInteractionsWithCompliance(
+    product: Product,
+    stack: UserStack[],
+    healthProfile?: HealthProfile
+  ): Promise<
+    StackInteractionResult & {
+      fdaCompliance: { disclaimer: string; sources: CitationSource[] };
+    }
+  > {
+    const result = await this.checkProductWithStack(
+      product,
+      stack,
+      healthProfile
+    );
+    return this.enhanceWithFDACompliance(result);
   }
 }
 

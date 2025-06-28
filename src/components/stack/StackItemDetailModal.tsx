@@ -7,13 +7,14 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
   StyleSheet,
   Alert,
   SafeAreaView,
 } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { OptimizedIcon } from '../common/OptimizedIcon';
 import { ValidatedInput } from '../common/ValidatedInput';
+import { OptimizedImage } from '../common/OptimizedImage';
 import { useFormValidation } from '../../hooks/useFormValidation';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { UserStack } from '../../types';
@@ -152,6 +153,8 @@ export const StackItemDetailModal: React.FC<StackItemDetailModalProps> = ({
 
   if (!item) return null;
 
+  const insets = useSafeAreaInsets();
+
   return (
     <Modal
       visible={visible}
@@ -163,7 +166,8 @@ export const StackItemDetailModal: React.FC<StackItemDetailModalProps> = ({
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
-            <MaterialIcons
+            <OptimizedIcon
+              type="material"
               name="arrow-back"
               size={28}
               color={COLORS.textPrimary}
@@ -183,16 +187,24 @@ export const StackItemDetailModal: React.FC<StackItemDetailModalProps> = ({
 
         <ScrollView
           style={styles.content}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + SPACING.md }]}
           showsVerticalScrollIndicator={false}
         >
           {/* Item Image */}
           <View style={styles.imageContainer}>
             {item.imageUrl ? (
-              <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+              <OptimizedImage
+                source={{ uri: item.imageUrl }}
+                style={styles.itemImage}
+                priority="high"
+                contentFit="contain"
+                fallbackIcon="cube-outline"
+                fallbackIconSize={48}
+              />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Ionicons
+                <OptimizedIcon
+                  type="ion"
                   name="cube-outline"
                   size={48}
                   color={COLORS.gray400}
@@ -360,13 +372,18 @@ export const StackItemDetailModal: React.FC<StackItemDetailModalProps> = ({
 
         {/* Fixed Footer with Remove Button */}
         {!isEditing && (
-          <View style={styles.footer}>
+          <View style={[styles.footer, { paddingBottom: insets.bottom + SPACING.xl }] }>
             <TouchableOpacity
               style={styles.removeButton}
               onPress={handleRemove}
               disabled={loading}
             >
-              <MaterialIcons name="delete" size={20} color={COLORS.white} />
+              <OptimizedIcon
+                type="material"
+                name="delete"
+                size={20}
+                color={COLORS.white}
+              />
               <Text style={styles.removeButtonText}>Remove from Stack</Text>
             </TouchableOpacity>
           </View>
@@ -438,7 +455,6 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 12,
-    resizeMode: 'contain',
   },
   imagePlaceholder: {
     width: 120,

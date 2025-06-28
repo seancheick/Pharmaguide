@@ -3,7 +3,7 @@
 // Critical for mobile app reliability
 
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { storageAdapter } from '../storage/storageAdapter';
 
 export interface NetworkState {
   isConnected: boolean;
@@ -292,12 +292,11 @@ export class NetworkService {
    */
   private async processStackUpdate(data: any): Promise<boolean> {
     try {
-      // Import dynamically to avoid circular dependencies
-      const { supabase } = await import('../supabase/client');
-
-      const { error } = await supabase.from('user_stack').upsert(data);
-
-      return !error;
+      // All stack data is now local-only for HIPAA compliance
+      // No remote sync is performed
+      // Optionally, update local storage here if needed
+      console.log('📡 Stack sync skipped (local-only for HIPAA compliance)');
+      return true;
     } catch (error) {
       console.error('❌ Stack update sync failed:', error);
       return false;
@@ -395,7 +394,7 @@ export class NetworkService {
    */
   private async loadOfflineQueue(): Promise<void> {
     try {
-      const stored = await AsyncStorage.getItem(this.OFFLINE_QUEUE_KEY);
+      const stored = await storageAdapter.getItem(this.OFFLINE_QUEUE_KEY);
       if (stored) {
         this.offlineQueue = JSON.parse(stored);
         console.log(
@@ -413,7 +412,7 @@ export class NetworkService {
    */
   private async saveOfflineQueue(): Promise<void> {
     try {
-      await AsyncStorage.setItem(
+      await storageAdapter.setItem(
         this.OFFLINE_QUEUE_KEY,
         JSON.stringify(this.offlineQueue)
       );

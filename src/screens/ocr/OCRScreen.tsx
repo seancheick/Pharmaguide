@@ -9,11 +9,11 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Image,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { PhotoCaptureOverlay } from '../../components/ocr/PhotoCaptureOverlay';
+import { OptimizedImage } from '../../components/common/OptimizedImage';
 import { ocrService } from '../../services/ocr/ocrService';
 import { convertSearchResultToProduct } from '../../services/search/productConverter';
 import { productService } from '../../services/products/productService';
@@ -39,9 +39,13 @@ export const OCRScreen: React.FC = () => {
   const { productName, brand } = (route.params as RouteParams) || {};
 
   // State
-  const [currentCapture, setCurrentCapture] = useState<'front_label' | 'ingredients' | 'nutrition_facts' | null>(null);
+  const [currentCapture, setCurrentCapture] = useState<
+    'front_label' | 'ingredients' | 'nutrition_facts' | null
+  >(null);
   const [capturedImages, setCapturedImages] = useState<CapturedImage[]>([]);
-  const [extractedIngredients, setExtractedIngredients] = useState<Ingredient[]>([]);
+  const [extractedIngredients, setExtractedIngredients] = useState<
+    Ingredient[]
+  >([]);
   const [processing, setProcessing] = useState(false);
   const [ocrResults, setOcrResults] = useState<any>({});
 
@@ -54,7 +58,10 @@ export const OCRScreen: React.FC = () => {
       processed: false,
     };
 
-    setCapturedImages(prev => [...prev.filter(img => img.type !== currentCapture), newImage]);
+    setCapturedImages(prev => [
+      ...prev.filter(img => img.type !== currentCapture),
+      newImage,
+    ]);
     setCurrentCapture(null);
 
     // Process the image immediately
@@ -67,9 +74,11 @@ export const OCRScreen: React.FC = () => {
 
       if (image.type === 'ingredients') {
         // Extract ingredients using AI
-        const ingredients = await ocrService.extractIngredientsFromImage(image.uri);
+        const ingredients = await ocrService.extractIngredientsFromImage(
+          image.uri
+        );
         setExtractedIngredients(ingredients);
-        
+
         // Update image as processed
         setCapturedImages(prev =>
           prev.map(img =>
@@ -93,7 +102,10 @@ export const OCRScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Image processing failed:', error);
-      Alert.alert('Processing Failed', 'Unable to process the image. Please try again.');
+      Alert.alert(
+        'Processing Failed',
+        'Unable to process the image. Please try again.'
+      );
     } finally {
       setProcessing(false);
     }
@@ -101,7 +113,10 @@ export const OCRScreen: React.FC = () => {
 
   const handleAnalyzeProduct = async () => {
     if (extractedIngredients.length === 0) {
-      Alert.alert('No Ingredients', 'Please capture the ingredients list first.');
+      Alert.alert(
+        'No Ingredients',
+        'Please capture the ingredients list first.'
+      );
       return;
     }
 
@@ -111,7 +126,10 @@ export const OCRScreen: React.FC = () => {
       // Create a product from OCR results
       const ocrProduct = {
         id: `ocr_${Date.now()}`,
-        name: productName || ocrResults.front_label?.text?.split('\n')[0] || 'OCR Product',
+        name:
+          productName ||
+          ocrResults.front_label?.text?.split('\n')[0] ||
+          'OCR Product',
         brand: brand || 'Unknown Brand',
         category: 'supplement',
         source: 'ocr' as const,
@@ -119,24 +137,32 @@ export const OCRScreen: React.FC = () => {
 
       // Convert to full product format
       const product = convertSearchResultToProduct(ocrProduct);
-      
+
       // Replace ingredients with OCR extracted ones
       product.ingredients = extractedIngredients;
 
       // Analyze with user's stack
-      const analysisResult = await productService.analyzeSearchResult(ocrProduct, stack);
+      const analysisResult = await productService.analyzeSearchResult(
+        ocrProduct,
+        stack
+      );
 
       // Navigate to analysis results
-      navigation.navigate('ProductAnalysisResults' as never, {
-        product: analysisResult.product,
-        analysis: analysisResult.analysis,
-        onClose: () => navigation.goBack(),
-        onScanAnother: () => navigation.goBack(),
-      } as never);
-
+      navigation.navigate(
+        'ProductAnalysisResults' as never,
+        {
+          product: analysisResult.product,
+          analysis: analysisResult.analysis,
+          onClose: () => navigation.goBack(),
+          onScanAnother: () => navigation.goBack(),
+        } as never
+      );
     } catch (error) {
       console.error('Product analysis failed:', error);
-      Alert.alert('Analysis Failed', 'Unable to analyze the product. Please try again.');
+      Alert.alert(
+        'Analysis Failed',
+        'Unable to analyze the product. Please try again.'
+      );
     } finally {
       setProcessing(false);
     }
@@ -173,38 +199,52 @@ export const OCRScreen: React.FC = () => {
     return (
       <TouchableOpacity
         key={step.type}
-        style={[
-          styles.captureStep,
-          captured && styles.captureStepCompleted,
-        ]}
+        style={[styles.captureStep, captured && styles.captureStepCompleted]}
         onPress={() => setCurrentCapture(step.type)}
         disabled={processing}
       >
         <View style={styles.stepIcon}>
           {captured ? (
             isProcessed ? (
-              <Ionicons name="checkmark-circle" size={24} color={COLORS.success} />
+              <Ionicons
+                name="checkmark-circle"
+                size={24}
+                color={COLORS.success}
+              />
             ) : (
               <ActivityIndicator size="small" color={COLORS.primary} />
             )
           ) : (
-            <Ionicons name={step.icon as any} size={24} color={COLORS.textSecondary} />
+            <Ionicons
+              name={step.icon as any}
+              size={24}
+              color={COLORS.textSecondary}
+            />
           )}
         </View>
-        
+
         <View style={styles.stepContent}>
           <Text style={styles.stepTitle}>{step.title}</Text>
           <Text style={styles.stepDescription}>{step.description}</Text>
-          {step.required && (
-            <Text style={styles.requiredLabel}>Required</Text>
-          )}
+          {step.required && <Text style={styles.requiredLabel}>Required</Text>}
         </View>
 
         {captured && (
-          <Image source={{ uri: captured.uri }} style={styles.stepPreview} />
+          <OptimizedImage
+            source={{ uri: captured.uri }}
+            style={styles.stepPreview}
+            priority="low"
+            contentFit="cover"
+            fallbackIcon="image-outline"
+            fallbackIconSize={16}
+          />
         )}
 
-        <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={COLORS.textSecondary}
+        />
       </TouchableOpacity>
     );
   };
@@ -222,7 +262,10 @@ export const OCRScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.title}>Scan Supplement Label</Text>
@@ -280,7 +323,8 @@ export const OCRScreen: React.FC = () => {
         <TouchableOpacity
           style={[
             styles.analyzeButton,
-            (extractedIngredients.length === 0 || processing) && styles.analyzeButtonDisabled,
+            (extractedIngredients.length === 0 || processing) &&
+              styles.analyzeButtonDisabled,
           ]}
           onPress={handleAnalyzeProduct}
           disabled={extractedIngredients.length === 0 || processing}

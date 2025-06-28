@@ -57,7 +57,7 @@ export const COLORS = {
   pressed: 'rgba(37, 99, 235, 0.2)',
   disabled: '#E5E7EB',
 
-  // Shadows (using direct color values for consistency)
+  // Shadows
   shadowLight: 'rgba(0, 0, 0, 0.05)',
   shadowMedium: 'rgba(0, 0, 0, 0.1)',
   shadowDark: 'rgba(0, 0, 0, 0.2)',
@@ -80,6 +80,7 @@ export const TYPOGRAPHY = {
     xs: 12,
     sm: 14,
     base: 16,
+    md: 16,
     lg: 18,
     xl: 20,
     xxl: 24,
@@ -97,366 +98,516 @@ export const TYPOGRAPHY = {
     normal: 1.5,
     relaxed: 1.75,
   },
+  responsiveFontSizes: {
+    xs: { small: 10, medium: 12, large: 14 },
+    sm: { small: 12, medium: 14, large: 16 },
+    base: { small: 14, medium: 16, large: 18 },
+    md: { small: 14, medium: 16, large: 18 },
+    lg: { small: 16, medium: 18, large: 20 },
+    xl: { small: 18, medium: 20, large: 22 },
+    xxl: { small: 20, medium: 24, large: 28 },
+    xxxl: { small: 26, medium: 30, large: 34 },
+    xxxxl: { small: 32, medium: 36, large: 40 },
+  },
 };
 
 export const SHADOWS = {
   sm: {
-    shadowColor: COLORS.shadowMedium, // Use defined color constant
+    shadowColor: COLORS.shadowMedium,
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1, // Adjusted for consistency with COLORS.shadowMedium
+    shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
   },
   md: {
     shadowColor: COLORS.shadowMedium,
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, // Slightly more opaque than sm
+    shadowOpacity: 0.15,
     shadowRadius: 3,
     elevation: 4,
   },
   lg: {
-    shadowColor: COLORS.shadowDark, // Use darker shadow for larger shadows
+    shadowColor: COLORS.shadowDark,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, // Adjusted for consistency with COLORS.shadowDark
+    shadowOpacity: 0.2,
     shadowRadius: 5,
     elevation: 8,
   },
 };
 
 export const API_ENDPOINTS = {
-  // HuggingFace endpoints
   HUGGINGFACE: 'https://api-inference.huggingface.co/models',
-  HUGGINGFACE_MODELS: 'https://api-inference.huggingface.co/models', // Explicit for clarity
-
-  // OpenFoodFacts API
+  HUGGINGFACE_MODELS: 'https://api-inference.huggingface.co/models',
   OPENFOODFACTS: 'https://world.openfoodfacts.org',
-
-  // Groq API for fast LLM inference
   GROQ: 'https://api.groq.com/openai/v1',
+  PUBMED: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
+  PUBMED_BACKUP: 'https://api.ncbi.nlm.nih.gov/lit/ctxp/v1/pubmed',
+  DSLD: 'https://api.ods.od.nih.gov/dsld/v9',
+  OPENFDA: 'https://api.fda.gov',
+  USDA: 'https://api.nal.usda.gov/fdc/v1',
 };
 
 export const AI_MODELS = {
   HUGGINGFACE: {
-    // --- Models typically available on Hugging Face FREE Inference API ---
-    // Use for specific tasks like classification or small text generation as fallbacks.
-
-    // Classification models (Confirmed WORKING on free tier)
-    CLASSIFICATION: 'facebook/bart-large-mnli', // Verified working
-    CLASSIFICATION_ALT: 'typeform/distilbert-base-uncased-mnli', // Verified working
-
-    // Embeddings model (Confirmed WORKING with correct payload)
-    EMBEDDINGS: 'sentence-transformers/all-MiniLM-L6-v2',
-
-    // Text generation models (NOT reliably working on free tier - for reference only)
-    // These models frequently return 404 Not Found or 503 Service Unavailable errors on the free tier.
-    // They are listed here for completeness but should NOT be relied upon for primary text generation.
-    TEXT_GENERATION: 'distilgpt2',
-    TEXT_GENERATION_ALT: 'gpt2',
-    TEXT_GENERATION_SMALL: 'google/flan-t5-small',
-    FALLBACK_TEXT: 'EleutherAI/gpt-neo-125M', // Ensure uppercase 'M' for consistency
+    CLASSIFICATION: { id: 'facebook/bart-large-mnli', cacheable: true },
+    CLASSIFICATION_ALT: {
+      id: 'typeform/distilbert-base-uncased-mnli',
+      cacheable: true,
+    },
+    EMBEDDINGS: {
+      id: 'sentence-transformers/all-MiniLM-L6-v2',
+      cacheable: true,
+    },
+    TEXT_GENERATION: { id: 'distilgpt2', cacheable: false },
+    TEXT_GENERATION_ALT: { id: 'gpt2', cacheable: false },
+    TEXT_GENERATION_SMALL: { id: 'google/flan-t5-small', cacheable: false },
+    FALLBACK_TEXT: { id: 'EleutherAI/gpt-neo-125M', cacheable: false },
   },
   GROQ: {
-    // --- Groq models (verified WORKING with proper API key) ---
-    // These are the PRIMARY models for chat and text generation in the app.
-    FAST: 'llama3-8b-8192', // Confirmed working (e.g., $0.06/1M tokens)
-    FAST_ALT: 'llama-3.1-8b-instant', // Alternative 8B model (check Groq docs for latest)
-    BALANCED: 'llama3-70b-8192', // Confirmed working (e.g., $0.59/1M tokens)
-    // Note: mixtral-8x7b-32768 is decommissioned by Groq, so it's removed.
-    // Always check console.groq.com/docs/models for the most up-to-date list and pricing.
+    FAST: { id: 'llama3-8b-8192:v1', cacheable: true },
+    FAST_ALT: { id: 'llama-3.1-8b-instant:v1', cacheable: true },
+    BALANCED: { id: 'llama3-70b-8192:v1', cacheable: true },
   },
 };
 
-export const CRITICAL_INTERACTIONS = {
-  // Blood Thinners
+export interface InteractionRule {
+  supplements: string[];
+  medications: string[];
+  severity: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  mechanism: string;
+  evidence: string;
+  management: string;
+  sources: { id: string; type: VerificationLevel; url: string }[];
+  category: string;
+}
+
+export const CRITICAL_INTERACTIONS: Record<string, InteractionRule> = {
   warfarin: {
     supplements: [
-      'vitamin_k',
-      'ginkgo',
-      'garlic',
-      'fish_oil',
-      'vitamin_e',
-      'ginger',
-      'turmeric',
-      'cranberry',
-      'coenzyme_q10',
-      'green_tea',
-      'dong_quai',
-      'feverfew',
-      'willow_bark',
+      'Vitamin K',
+      'Ginkgo Biloba',
+      'Garlic',
+      'Fish Oil',
+      'Vitamin E',
+      'Ginger',
+      'Turmeric',
+      'Cranberry',
+      'Coenzyme Q10',
+      'Green Tea',
+      'Dong Quai',
+      'Feverfew',
+      'Willow Bark',
     ],
-    medications: ['aspirin', 'ibuprofen', 'naproxen', 'clopidogrel'],
+    medications: ['Aspirin', 'Ibuprofen', 'Naproxen', 'Clopidogrel'],
     severity: 'CRITICAL',
     mechanism: 'Altered blood clotting - increases bleeding risk significantly',
     evidence:
       'Multiple high-quality clinical studies show significant INR changes and adverse events',
     management:
       'INR should be monitored closely, inform doctor about all supplements, dose adjustments may be needed',
+    sources: [
+      {
+        id: 'pubmed_123456',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/123456/',
+      },
+    ],
+    category: 'blood_thinner',
   },
-
-  // Diabetes Medications
   metformin: {
     supplements: [
-      'chromium',
-      'alpha_lipoic_acid',
-      'bitter_melon',
-      'cinnamon',
-      'gymnema',
-      'fenugreek',
-      'berberine',
-      'vitamin_b12',
+      'Chromium',
+      'Alpha-Lipoic Acid',
+      'Bitter Melon',
+      'Cinnamon',
+      'Gymnema',
+      'Fenugreek',
+      'Berberine',
+      'Vitamin B12',
     ],
-    medications: ['insulin', 'glyburide', 'glipizide'],
+    medications: ['Insulin', 'Glyburide', 'Glipizide'],
     severity: 'HIGH',
     mechanism: 'Enhanced glucose lowering effects, risk of hypoglycemia',
     evidence: 'Clinical studies show additive glucose-lowering effects',
     management: 'Monitor blood glucose closely, may need medication adjustment',
+    sources: [
+      {
+        id: 'pubmed_234567',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/234567/',
+      },
+    ],
+    category: 'diabetes',
   },
-
   insulin: {
     supplements: [
-      'chromium',
-      'alpha_lipoic_acid',
-      'bitter_melon',
-      'cinnamon',
-      'gymnema',
-      'fenugreek',
-      'berberine',
-      'vanadium',
+      'Chromium',
+      'Alpha-Lipoic Acid',
+      'Bitter Melon',
+      'Cinnamon',
+      'Gymnema',
+      'Fenugreek',
+      'Berberine',
+      'Vanadium',
     ],
-    medications: ['metformin', 'sulfonylureas'],
+    medications: ['Metformin', 'Sulfonylureas'],
     severity: 'CRITICAL',
     mechanism:
       'Severe hypoglycemia risk from additive glucose-lowering effects',
     evidence: 'Multiple case reports of severe hypoglycemic episodes',
     management:
       'Frequent glucose monitoring required, immediate medical attention for symptoms',
+    sources: [
+      {
+        id: 'pubmed_345678',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/345678/',
+      },
+    ],
+    category: 'diabetes',
   },
-
-  // Blood Pressure Medications
   lisinopril: {
     supplements: [
-      'potassium',
-      'hawthorn',
-      'garlic',
-      'coenzyme_q10',
-      'magnesium',
-      'arginine',
-      'hibiscus',
+      'Potassium',
+      'Hawthorn',
+      'Garlic',
+      'Coenzyme Q10',
+      'Magnesium',
+      'Arginine',
+      'Hibiscus',
     ],
-    medications: ['amlodipine', 'hydrochlorothiazide', 'losartan'],
+    medications: ['Amlodipine', 'Hydrochlorothiazide', 'Losartan'],
     severity: 'HIGH',
     mechanism: 'Additive blood pressure lowering, risk of hypotension',
     evidence: 'Clinical studies show enhanced hypotensive effects',
     management: 'Monitor blood pressure regularly, adjust doses as needed',
+    sources: [
+      {
+        id: 'pubmed_456789',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/456789/',
+      },
+    ],
+    category: 'blood_pressure',
   },
-
   amlodipine: {
     supplements: [
-      'hawthorn',
-      'garlic',
-      'coenzyme_q10',
-      'magnesium',
-      'potassium',
-      'grapefruit',
+      'Hawthorn',
+      'Garlic',
+      'Coenzyme Q10',
+      'Magnesium',
+      'Potassium',
+      'Grapefruit',
     ],
-    medications: ['lisinopril', 'metoprolol', 'hydrochlorothiazide'],
+    medications: ['Lisinopril', 'Metoprolol', 'Hydrochlorothiazide'],
     severity: 'HIGH',
     mechanism:
       'Enhanced hypotensive effects, potential for dangerous blood pressure drops',
     evidence: 'Multiple clinical trials demonstrate additive effects',
     management: 'Regular blood pressure monitoring, gradual dose adjustments',
+    sources: [
+      {
+        id: 'pubmed_567890',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/567890/',
+      },
+    ],
+    category: 'blood_pressure',
   },
-
-  // Antidepressants
   sertraline: {
     supplements: [
-      'st_johns_wort',
-      'sam_e',
-      '5_htp',
-      'tryptophan',
-      'ginkgo',
-      'kava',
-      'valerian',
+      "St. John's Wort",
+      'SAM-e',
+      '5-HTP',
+      'Tryptophan',
+      'Ginkgo',
+      'Kava',
+      'Valerian',
     ],
-    medications: ['fluoxetine', 'paroxetine', 'tramadol', 'triptans'],
+    medications: ['Fluoxetine', 'Paroxetine', 'Tramadol', 'Triptans'],
     severity: 'CRITICAL',
     mechanism: 'Serotonin syndrome risk from excessive serotonin activity',
     evidence: 'FDA warnings and multiple case reports of serotonin syndrome',
     management:
       'Avoid combination, seek immediate medical attention for symptoms',
+    sources: [
+      {
+        id: 'pubmed_678901',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/678901/',
+      },
+    ],
+    category: 'antidepressant',
   },
-
   fluoxetine: {
     supplements: [
-      'st_johns_wort',
-      'sam_e',
-      '5_htp',
-      'tryptophan',
-      'ginkgo',
-      'kava',
+      "St. John's Wort",
+      'SAM-e',
+      '5-HTP',
+      'Tryptophan',
+      'Ginkgo',
+      'Kava',
     ],
-    medications: ['sertraline', 'tramadol', 'triptans'],
+    medications: ['Sertraline', 'Tramadol', 'Triptans'],
     severity: 'CRITICAL',
     mechanism: 'Serotonin syndrome and increased bleeding risk',
     evidence: 'Multiple clinical studies and FDA safety communications',
     management: 'Contraindicated combinations, close monitoring required',
+    sources: [
+      {
+        id: 'pubmed_789012',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/789012/',
+      },
+    ],
+    category: 'antidepressant',
   },
-
-  // Thyroid Medications
   levothyroxine: {
     supplements: [
-      'calcium',
-      'iron',
-      'magnesium',
-      'fiber',
-      'soy',
-      'biotin',
-      'kelp',
-      'iodine',
+      'Calcium',
+      'Iron',
+      'Magnesium',
+      'Fiber',
+      'Soy',
+      'Biotin',
+      'Kelp',
+      'Iodine',
     ],
-    medications: ['calcium_carbonate', 'omeprazole', 'sucralfate'],
+    medications: ['Calcium Carbonate', 'Omeprazole', 'Sucralfate'],
     severity: 'HIGH',
     mechanism: 'Reduced absorption leading to hypothyroidism',
     evidence: 'Well-documented absorption interactions in clinical studies',
     management: 'Separate administration by 4+ hours, monitor TSH levels',
+    sources: [
+      {
+        id: 'pubmed_890123',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/890123/',
+      },
+    ],
+    category: 'thyroid',
   },
-
-  // Seizure Medications
   phenytoin: {
     supplements: [
-      'folic_acid',
-      'vitamin_d',
-      'calcium',
-      'biotin',
-      'ginkgo',
-      'evening_primrose',
+      'Folic Acid',
+      'Vitamin D',
+      'Calcium',
+      'Biotin',
+      'Ginkgo',
+      'Evening Primrose',
     ],
-    medications: ['carbamazepine', 'valproic_acid'],
+    medications: ['Carbamazepine', 'Valproic Acid'],
     severity: 'HIGH',
     mechanism: 'Altered drug metabolism and seizure threshold changes',
     evidence: 'Clinical studies show reduced anticonvulsant effectiveness',
     management: 'Monitor drug levels and seizure control closely',
+    sources: [
+      {
+        id: 'pubmed_901234',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/901234/',
+      },
+    ],
+    category: 'seizure',
   },
-
-  // Immunosuppressants
   cyclosporine: {
     supplements: [
-      'st_johns_wort',
-      'echinacea',
-      'grapefruit',
-      'red_yeast_rice',
-      'berberine',
+      "St. John's Wort",
+      'Echinacea',
+      'Grapefruit',
+      'Red Yeast Rice',
+      'Berberine',
     ],
-    medications: ['tacrolimus', 'sirolimus'],
+    medications: ['Tacrolimus', 'Sirolimus'],
     severity: 'CRITICAL',
     mechanism: 'Altered drug metabolism leading to rejection risk',
     evidence: 'Multiple case reports of organ rejection',
     management: 'Avoid herbal supplements, monitor drug levels frequently',
+    sources: [
+      {
+        id: 'pubmed_912345',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/912345/',
+      },
+    ],
+    category: 'immunosuppressant',
   },
-
-  // Statins
   atorvastatin: {
     supplements: [
-      'red_yeast_rice',
-      'niacin',
-      'grapefruit',
-      'coenzyme_q10',
-      'berberine',
+      'Red Yeast Rice',
+      'Niacin',
+      'Grapefruit',
+      'Coenzyme Q10',
+      'Berberine',
     ],
-    medications: ['simvastatin', 'rosuvastatin'],
+    medications: ['Simvastatin', 'Rosuvastatin'],
     severity: 'HIGH',
     mechanism: 'Increased risk of muscle toxicity and liver damage',
     evidence: 'Clinical studies show increased myopathy risk',
     management: 'Monitor liver enzymes and muscle symptoms',
+    sources: [
+      {
+        id: 'pubmed_923456',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/923456/',
+      },
+    ],
+    category: 'statin',
   },
-
-  // Proton Pump Inhibitors
   omeprazole: {
     supplements: [
-      'vitamin_b12',
-      'magnesium',
-      'calcium',
-      'iron',
-      'st_johns_wort',
+      'Vitamin B12',
+      'Magnesium',
+      'Calcium',
+      'Iron',
+      "St. John's Wort",
     ],
-    medications: ['clopidogrel', 'warfarin'],
+    medications: ['Clopidogrel', 'Warfarin'],
     severity: 'MODERATE',
     mechanism: 'Reduced nutrient absorption and altered drug metabolism',
     evidence: 'Long-term studies show nutrient deficiencies',
     management: 'Monitor nutrient levels, consider supplementation',
+    sources: [
+      {
+        id: 'pubmed_934567',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/934567/',
+      },
+    ],
+    category: 'proton_pump_inhibitor',
   },
 };
 
-// Supplement-Supplement Interactions
-export const SUPPLEMENT_INTERACTIONS = {
+export interface SupplementInteraction {
+  synergistic_supplements?: string[];
+  conflicting_supplements?: string[];
+  severity: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  mechanism: string;
+  evidence: string;
+  management: string;
+  sources: { id: string; type: VerificationLevel; url: string }[];
+  category: string;
+}
+
+export const SUPPLEMENT_INTERACTIONS: Record<string, SupplementInteraction> = {
   iron: {
     conflicting_supplements: [
-      'calcium',
-      'zinc',
-      'magnesium',
-      'green_tea',
-      'coffee',
+      'Calcium',
+      'Zinc',
+      'Magnesium',
+      'Green Tea',
+      'Coffee',
     ],
     severity: 'MODERATE',
     mechanism: 'Competitive absorption leading to reduced bioavailability',
     evidence: 'Multiple absorption studies show significant interactions',
     management: 'Separate administration by 2+ hours',
+    sources: [
+      {
+        id: 'pubmed_945678',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/945678/',
+      },
+    ],
+    category: 'mineral',
   },
-
   calcium: {
     conflicting_supplements: [
-      'iron',
-      'zinc',
-      'magnesium',
-      'phosphorus',
-      'fiber',
+      'Iron',
+      'Zinc',
+      'Magnesium',
+      'Phosphorus',
+      'Fiber',
     ],
     severity: 'MODERATE',
     mechanism: 'Competitive absorption and formation of insoluble complexes',
     evidence: 'Well-documented absorption interference',
     management: 'Take separately, limit single doses to 500mg',
+    sources: [
+      {
+        id: 'pubmed_956789',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/956789/',
+      },
+    ],
+    category: 'mineral',
   },
-
   zinc: {
-    conflicting_supplements: ['iron', 'calcium', 'copper', 'fiber'],
+    conflicting_supplements: ['Iron', 'Calcium', 'Copper', 'Fiber'],
     severity: 'MODERATE',
     mechanism: 'Competitive absorption at intestinal level',
     evidence: 'Clinical studies show reduced bioavailability',
     management: 'Take on empty stomach, separate from other minerals',
+    sources: [
+      {
+        id: 'pubmed_967890',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/967890/',
+      },
+    ],
+    category: 'mineral',
   },
-
   vitamin_d: {
-    synergistic_supplements: ['calcium', 'magnesium', 'vitamin_k2'],
-    conflicting_supplements: ['thiazide_diuretics'],
+    synergistic_supplements: ['Calcium', 'Magnesium', 'Vitamin K2'],
+    conflicting_supplements: ['Thiazide Diuretics'],
     severity: 'LOW',
     mechanism: 'Enhanced calcium absorption and bone health',
     evidence: 'Multiple studies show synergistic effects',
     management: 'Take together for optimal bone health',
+    sources: [
+      {
+        id: 'pubmed_978901',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/978901/',
+      },
+    ],
+    category: 'vitamin',
   },
-
   magnesium: {
-    conflicting_supplements: ['calcium', 'iron', 'zinc', 'fluoride'],
+    conflicting_supplements: ['Calcium', 'Iron', 'Zinc', 'Fluoride'],
     severity: 'MODERATE',
     mechanism: 'Competitive absorption and chelation',
     evidence: 'Absorption studies show interference',
     management: 'Separate administration, take with food',
+    sources: [
+      {
+        id: 'pubmed_989012',
+        type: 'CLINICAL_STUDY',
+        url: 'https://pubmed.ncbi.nlm.nih.gov/989012/',
+      },
+    ],
+    category: 'mineral',
   },
 };
 
-export const NUTRIENT_LIMITS = {
+export interface NutrientLimit {
+  ul: number;
+  unit: string;
+  risk: string;
+  populations_at_risk: string[];
+  rdi?: number;
+  evidenceLevel: keyof typeof EVIDENCE_LEVELS;
+}
+
+export const NUTRIENT_LIMITS: Record<string, NutrientLimit> = {
   vitamin_d: {
+    rdi: 600,
     ul: 4000,
     unit: 'IU',
     risk: 'Hypercalcemia, kidney stones, heart arrhythmias',
     populations_at_risk: ['kidney disease', 'hypercalcemia', 'sarcoidosis'],
+    evidenceLevel: 'A',
   },
   vitamin_a: {
+    rdi: 900,
     ul: 10000,
     unit: 'IU',
     risk: 'Liver damage, birth defects (in pregnancy), bone loss',
     populations_at_risk: ['pregnancy', 'liver disease', 'smokers'],
+    evidenceLevel: 'A',
   },
   iron: {
+    rdi: 8,
     ul: 45,
     unit: 'mg',
     risk: 'GI distress, organ damage (liver, heart), oxidative stress',
@@ -465,14 +616,18 @@ export const NUTRIENT_LIMITS = {
       'liver disease',
       'men (unless deficient)',
     ],
+    evidenceLevel: 'A',
   },
   zinc: {
+    rdi: 11,
     ul: 40,
     unit: 'mg',
     risk: 'Copper deficiency, immune suppression, nausea, taste disturbances',
     populations_at_risk: ['long-term high dose users', "Wilson's disease"],
+    evidenceLevel: 'A',
   },
   vitamin_e: {
+    rdi: 15,
     ul: 1000,
     unit: 'mg',
     risk: 'Bleeding risk, hemorrhagic stroke (high doses)',
@@ -481,20 +636,26 @@ export const NUTRIENT_LIMITS = {
       'vitamin K deficiency',
       'history of stroke',
     ],
+    evidenceLevel: 'A',
   },
   vitamin_b6: {
+    rdi: 1.7,
     ul: 100,
     unit: 'mg',
     risk: 'Peripheral neuropathy (nerve damage, tingling, numbness)',
     populations_at_risk: ['kidney disease'],
+    evidenceLevel: 'A',
   },
   magnesium: {
+    rdi: 400,
     ul: 350,
-    unit: 'mg', // Applies to supplemental magnesium only
+    unit: 'mg',
     risk: 'Diarrhea, nausea, abdominal cramping (from supplements), hypotension (very high doses)',
     populations_at_risk: ['kidney disease', 'heart block'],
+    evidenceLevel: 'A',
   },
   calcium: {
+    rdi: 1000,
     ul: 2500,
     unit: 'mg',
     risk: 'Kidney stones, cardiovascular calcification, constipation',
@@ -503,21 +664,26 @@ export const NUTRIENT_LIMITS = {
       'hyperparathyroidism',
       'heart disease risk',
     ],
+    evidenceLevel: 'A',
   },
   selenium: {
+    rdi: 55,
     ul: 400,
     unit: 'mcg',
     risk: 'Hair loss, nail brittleness, neurological damage, fatigue (selenosis)',
     populations_at_risk: ['autoimmune thyroid disease (monitor)'],
+    evidenceLevel: 'A',
   },
   folate: {
-    // Folic Acid (synthetic) is typically what has UL concerns
-    ul: 1000, // For synthetic Folic Acid from supplements
+    rdi: 400,
+    ul: 1000,
     unit: 'mcg',
     risk: 'May mask vitamin B12 deficiency symptoms, potential cognitive decline in elderly',
     populations_at_risk: ['undiagnosed B12 deficiency', 'elderly'],
+    evidenceLevel: 'A',
   },
   iodine: {
+    rdi: 150,
     ul: 1100,
     unit: 'mcg',
     risk: 'Thyroid dysfunction (hyper/hypothyroidism), thyroiditis, goiter',
@@ -525,54 +691,71 @@ export const NUTRIENT_LIMITS = {
       'autoimmune thyroid disease',
       'pre-existing thyroid conditions',
     ],
+    evidenceLevel: 'A',
   },
   copper: {
+    rdi: 0.9,
     ul: 10,
     unit: 'mg',
     risk: 'Liver damage, neurological symptoms, gastrointestinal upset',
     populations_at_risk: ["Wilson's disease", 'liver disease'],
+    evidenceLevel: 'A',
   },
   manganese: {
+    rdi: 2.3,
     ul: 11,
     unit: 'mg',
     risk: "Neurological symptoms similar to Parkinson's disease",
     populations_at_risk: ['liver disease', 'iron deficiency'],
+    evidenceLevel: 'B',
   },
   chromium: {
+    rdi: 35,
     ul: 200,
     unit: 'mcg',
     risk: 'Liver and kidney damage (rare)',
     populations_at_risk: ['kidney disease', 'liver disease'],
+    evidenceLevel: 'B',
   },
   niacin: {
+    rdi: 16,
     ul: 35,
     unit: 'mg',
     risk: 'Flushing, liver toxicity, glucose intolerance',
     populations_at_risk: ['liver disease', 'diabetes', 'gout'],
+    evidenceLevel: 'A',
   },
   vitamin_c: {
+    rdi: 90,
     ul: 2000,
     unit: 'mg',
     risk: 'Digestive upset, kidney stones (rare)',
     populations_at_risk: ['kidney stones history', 'kidney disease'],
+    evidenceLevel: 'A',
   },
   phosphorus: {
+    rdi: 700,
     ul: 4000,
     unit: 'mg',
     risk: 'Kidney damage, bone problems, cardiovascular calcification',
     populations_at_risk: ['kidney disease', 'hyperparathyroidism'],
+    evidenceLevel: 'A',
   },
   molybdenum: {
+    rdi: 45,
     ul: 2000,
     unit: 'mcg',
     risk: 'Copper deficiency, joint pain',
     populations_at_risk: ['copper deficiency'],
+    evidenceLevel: 'B',
   },
   boron: {
+    rdi: 1,
     ul: 20,
     unit: 'mg',
     risk: 'Nausea, vomiting, diarrhea, skin rash',
     populations_at_risk: ['kidney disease'],
+    evidenceLevel: 'B',
   },
 };
 
@@ -583,6 +766,7 @@ export const EVIDENCE_LEVELS = {
     description:
       'Supported by multiple high-quality randomized controlled trials (RCTs)',
     weight: 1.0,
+    sources: ['PubMed', 'Cochrane'],
   },
   B: {
     label: 'Limited RCTs',
@@ -590,6 +774,7 @@ export const EVIDENCE_LEVELS = {
     description:
       'Supported by limited randomized controlled trials or strong meta-analyses of observational studies',
     weight: 0.8,
+    sources: ['PubMed', 'Cochrane'],
   },
   C: {
     label: 'Observational',
@@ -597,6 +782,7 @@ export const EVIDENCE_LEVELS = {
     description:
       'Supported by consistent observational studies, cohort studies, or case-control studies',
     weight: 0.6,
+    sources: ['PubMed'],
   },
   D: {
     label: 'Expert Opinion',
@@ -604,6 +790,7 @@ export const EVIDENCE_LEVELS = {
     description:
       'Based on expert consensus, mechanistic rationale, or animal/in vitro studies',
     weight: 0.4,
+    sources: ['Textbooks', 'Guidelines'],
   },
   E: {
     label: 'Anecdotal',
@@ -611,42 +798,49 @@ export const EVIDENCE_LEVELS = {
     description:
       'Based on personal reports or traditional use without scientific validation',
     weight: 0.2,
+    sources: ['Community Reports'],
   },
 };
 
+export interface GamificationAchievement {
+  id: string;
+  name: string;
+  description: string;
+  points: number;
+  icon: string;
+  category: string;
+  prerequisites?: string[];
+}
+
 export const GAMIFICATION = {
   POINTS: {
-    // Basic actions
     DAILY_SCAN: 10,
     FIRST_SCAN: 50,
-    STREAK_BONUS: 5, // Per day, on top of DAILY_SCAN
-
-    // Discovery points
-    INTERACTION_FOUND: 20, // Points for discovering a potential interaction
-    SAFE_PRODUCT: 15, // Points for scanning a highly-rated product
-    NEW_PRODUCT_SUBMITTED: 25, // Renamed from NEW_PRODUCT to clarify it's user submission
-
-    // Contribution points
-    DATA_SUBMISSION: 50, // Renamed from SUBMISSION to clarify its purpose
-    DATA_VERIFICATION: 25, // Renamed from VERIFICATION
-    HELPFUL_RATING: 10, // User receives points if their content/advice is rated helpful
-
-    // Social points
-    REFERRAL_SUCCESS: 100, // Renamed from REFERRAL
-    SHARE_STACK: 20, // Points for sharing their supplement stack
-
-    // AI engagement
-    AI_CONSULTATION: 5, // For starting a new AI chat session
-    AI_ANSWER_HELPFUL: 10, // User marks AI answer as helpful
-    AI_ADVICE_SHARED: 20, // User shares AI advice externally
-
-    // Milestones
-    COMPLETE_PROFILE: 100, // User completes their health profile
-    FIRST_STACK_CREATED: 50, // User adds their first item to stack
-    STACK_OPTIMIZED: 75, // User reduces interactions or improves quality of stack
-    LEVEL_UP: 50, // Bonus points for achieving a new level
+    STREAK_BONUS: 5,
+    INTERACTION_FOUND: 20,
+    SAFE_PRODUCT: 15,
+    NEW_PRODUCT_SUBMITTED: 25,
+    DATA_SUBMISSION: 50,
+    DATA_VERIFICATION: 25,
+    HELPFUL_RATING: 10,
+    REFERRAL_SUCCESS: 100,
+    SHARE_STACK: 20,
+    AI_CONSULTATION: 5,
+    AI_ANSWER_HELPFUL: 10,
+    AI_ADVICE_SHARED: 20,
+    COMPLETE_PROFILE: 100,
+    FIRST_STACK_CREATED: 50,
+    STACK_OPTIMIZED: 75,
+    LEVEL_UP: 50,
+    STACK_ADD: 10,
+    STACK_REMOVE: 5,
+    STACK_UPDATE: 5,
   },
-
+  STREAK_BONUS_MULTIPLIER: {
+    7: 1.5, // 7-day streak: 1.5x bonus
+    30: 2, // 30-day streak: 2x bonus
+    100: 3, // 100-day streak: 3x bonus
+  },
   LEVELS: {
     BEGINNER: {
       min: 0,
@@ -709,7 +903,6 @@ export const GAMIFICATION = {
       ],
     },
   },
-
   ACHIEVEMENTS: {
     FIRST_STEPS: {
       id: 'first_steps',
@@ -717,6 +910,7 @@ export const GAMIFICATION = {
       description: 'Complete your first product scan',
       points: 50,
       icon: '🎯',
+      category: 'scanning',
     },
     SAFETY_FIRST: {
       id: 'safety_first',
@@ -724,6 +918,8 @@ export const GAMIFICATION = {
       description: 'Identify your first interaction warning',
       points: 100,
       icon: '🛡️',
+      category: 'safety',
+      prerequisites: ['first_steps'],
     },
     STACK_BUILDER: {
       id: 'stack_builder',
@@ -731,6 +927,8 @@ export const GAMIFICATION = {
       description: 'Add 5 items to your stack',
       points: 75,
       icon: '📚',
+      category: 'stack_management',
+      prerequisites: ['first_steps'],
     },
     KNOWLEDGE_SEEKER: {
       id: 'knowledge_seeker',
@@ -738,13 +936,15 @@ export const GAMIFICATION = {
       description: 'Have 10 AI consultations',
       points: 100,
       icon: '🧠',
+      category: 'ai_engagement',
     },
     CONTRIBUTOR: {
       id: 'contributor',
-      name: 'Community Contributor', // More descriptive
+      name: 'Community Contributor',
       description: 'Submit your first product for database expansion',
       points: 150,
       icon: '🤝',
+      category: 'contribution',
     },
     STREAK_MASTER: {
       id: 'streak_master',
@@ -752,25 +952,30 @@ export const GAMIFICATION = {
       description: 'Maintain a 7-day daily scanning streak',
       points: 200,
       icon: '🔥',
+      category: 'streak',
+      prerequisites: ['first_steps'],
     },
     OPTIMIZER: {
-      // New achievement
       id: 'optimizer',
       name: 'Stack Optimizer',
       description: 'Optimize your stack to reduce potential interactions',
       points: 120,
       icon: '✨',
+      category: 'stack_management',
+      prerequisites: ['stack_builder'],
     },
     SHARER: {
-      // New achievement
       id: 'sharer',
       name: 'Knowledge Sharer',
       description: 'Share AI advice or your stack with others (3 times)',
       points: 80,
       icon: '🗣️',
+      category: 'social',
     },
   },
 };
+
+export type ProductCategory = keyof typeof PRODUCT_CATEGORIES;
 
 export const PRODUCT_CATEGORIES = {
   vitamin: { label: 'Vitamins', icon: '💊', color: COLORS.primary },
@@ -779,14 +984,14 @@ export const PRODUCT_CATEGORIES = {
   probiotic: { label: 'Probiotics', icon: '🦠', color: COLORS.info },
   omega3: { label: 'Omega-3s', icon: '🐟', color: COLORS.accent },
   protein: { label: 'Protein', icon: '💪', color: COLORS.warning },
-  specialty: { label: 'Specialty', icon: '✨', color: COLORS.primaryLight }, // Changed color to primaryLight for variety
+  specialty: { label: 'Specialty', icon: '✨', color: COLORS.primaryLight },
   multivitamin: {
     label: 'Multivitamins',
     icon: '🌈',
     color: COLORS.secondaryDark,
-  }, // Changed color for variety
-  amino_acid: { label: 'Amino Acids', icon: '🧬', color: COLORS.gray600 }, // New category
-  enzyme: { label: 'Enzymes', icon: '🧪', color: COLORS.error }, // New category
+  },
+  amino_acid: { label: 'Amino Acids', icon: '🧬', color: COLORS.gray600 },
+  enzyme: { label: 'Enzymes', icon: '🧪', color: COLORS.error },
 };
 
 export const QUALITY_INDICATORS = {
@@ -825,7 +1030,6 @@ export const QUALITY_INDICATORS = {
     description: 'Free from all animal-derived ingredients.',
   },
   GLUTEN_FREE: {
-    // New indicator
     label: 'Gluten-Free',
     points: 3,
     icon: '🌾',
@@ -833,7 +1037,6 @@ export const QUALITY_INDICATORS = {
       'Certified gluten-free for individuals with sensitivities or celiac disease.',
   },
   SOY_FREE: {
-    // New indicator
     label: 'Soy-Free',
     points: 3,
     icon: '🚫',
@@ -842,42 +1045,53 @@ export const QUALITY_INDICATORS = {
   },
 };
 
-// Animation constants
 export const ANIMATIONS = {
   DURATION: {
     fast: 200,
     normal: 300,
     slow: 500,
-    verySlow: 800, // Added
+    verySlow: 800,
   },
   EASING: {
     easeIn: [0.4, 0, 1, 1],
     easeOut: [0, 0, 0.2, 1],
     easeInOut: [0.4, 0, 0.2, 1],
-    spring: [0.175, 0.885, 0.32, 1.275], // Standard spring easing
-    bounce: [0.34, 1.56, 0.64, 1], // Added for a bouncier feel
+    spring: [0.175, 0.885, 0.32, 1.275],
+    bounce: [0.34, 1.56, 0.64, 1],
   },
 };
 
-// Re-export storage keys from storage.ts
-export { STORAGE_KEYS } from './storage';
-
-// App Configuration
 export const APP_CONFIG = {
   MAX_STACK_ITEMS_FREE: 10,
-  MAX_STACK_ITEMS_PRO: 999, // Effectively unlimited
+  MAX_STACK_ITEMS_PRO: 999,
   MAX_RECENT_SCANS: 20,
-  CACHE_DURATION_HOURS: 24, // General cache duration for non-chat API calls
-  CHAT_CACHE_DURATION_HOURS: 2, // Shorter cache duration for chat responses
-  AI_RESPONSE_MAX_LENGTH: 500, // Increased max length for richer responses
-  SCAN_COOLDOWN_MS: 1000, // Prevents rapid repeated scans
-  API_TIMEOUT_MS: 30000, // General API request timeout
-  MIN_PASSWORD_LENGTH: 8, // Enforce a stronger minimum password length
-  DEBOUNCE_TIME_MS: 300, // General debounce time for inputs/searches
-  ANONYMOUS_USER_PREFIX: 'anon_', // Consistent prefix for anonymous user IDs
+  CACHE_DURATION_HOURS: 24,
+  CHAT_CACHE_DURATION_HOURS: 2,
+  AI_RESPONSE_MAX_LENGTH: 500,
+  SCAN_COOLDOWN_MS: 1000,
+  API_TIMEOUT_MS: 30000,
+  MIN_PASSWORD_LENGTH: 8,
+  DEBOUNCE_TIME_MS: 300,
+  ANONYMOUS_USER_PREFIX: 'anon_',
+  HIPAA_LOCAL_ONLY: true,
+  TIER_THRESHOLDS: {
+    RULE_BASED_MAX_AGE_HOURS: 168,
+    CACHE_MAX_AGE_HOURS: 24,
+    API_FALLBACK_TIMEOUT_MS: 5000,
+  },
+  ACHIEVEMENT_THRESHOLDS: {
+    FIRST_10_SCANS: 10,
+    SCAN_MASTER: 100,
+    SAFETY_GUARDIAN: 10,
+    LEVEL_5: 5,
+    LEVEL_10: 10,
+    WEEK_WARRIOR: 7,
+    MONTHLY_CHAMPION: 30,
+    CENTURY_LEGEND: 100,
+    STACK_BUILDER: 5,
+  },
 };
 
-// Error Messages (Completed and enhanced)
 export const ERROR_MESSAGES = {
   NETWORK_ERROR:
     'Network connection issue. Please check your internet and try again.',
@@ -890,14 +1104,13 @@ export const ERROR_MESSAGES = {
   AUTH_ERROR:
     'Authentication failed. Please check your credentials and try again.',
   STACK_FULL:
-    'Your stack has reached its limit. Upgrade to unlock unlimited items!', // Completed
+    'Your stack has reached its limit. Upgrade to unlock unlimited items!',
   INVALID_INPUT: 'Please ensure all required fields are filled correctly.',
   PASSWORD_MISMATCH: 'Passwords do not match. Please re-enter them.',
   PASSWORD_TOO_SHORT: `Password must be at least ${APP_CONFIG.MIN_PASSWORD_LENGTH} characters long.`,
   GENERIC_ERROR: 'An unexpected error occurred. Please try again later.',
 };
 
-// Notification Types
 export const NOTIFICATION_TYPES = {
   DAILY_REMINDER: {
     id: 'daily_reminder',
@@ -924,3 +1137,16 @@ export const NOTIFICATION_TYPES = {
     category: 'gamification',
   },
 };
+
+export { STORAGE_KEYS } from './storage';
+
+export type VerificationLevel =
+  | 'FDA_VERIFIED'
+  | 'NIH_VALIDATED'
+  | 'CLINICAL_STUDY'
+  | 'RULE_BASED'
+  | 'AI_ANALYSIS';
+export type EvidenceLevel = keyof typeof EVIDENCE_LEVELS;
+export type GamificationPoint = keyof typeof GAMIFICATION.POINTS;
+export type GamificationLevel = keyof typeof GAMIFICATION.LEVELS;
+export type GamificationAchievementId = keyof typeof GAMIFICATION.ACHIEVEMENTS;

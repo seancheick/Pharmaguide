@@ -1,6 +1,6 @@
 // src/screens/profile/DemographicsScreen.tsx
-// 🚀 WORLD-CLASS: Fast, Light, Legal, Easy, Sleek
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,12 @@ import {
   TextInput,
   Alert,
 } from 'react-native';
+import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { CustomHeader } from '../../components/common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
 import type {
   AgeRange,
   BiologicalSex,
@@ -24,9 +26,40 @@ import { DemographicsScreenProps } from '../../types/navigation';
 
 export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
   navigation,
+  route,
 }) => {
-  const [demographics, setDemographics] = useState<Partial<Demographics>>({});
+  // Accept initialValue from navigation params for progress recovery
+  const initialValue = route?.params?.initialValue as
+    | Partial<Demographics>
+    | undefined;
+  const [demographics, setDemographics] = useState<Partial<Demographics>>(
+    initialValue || {}
+  );
   const [isLoading, setIsLoading] = useState(false);
+  const { updateDemographics } = useHealthProfile();
+
+  // 💾 Load existing data when component mounts (if not provided by initialValue)
+  useEffect(() => {
+    if (initialValue) return; // Already set from navigation
+    const loadExistingData = async () => {
+      try {
+        // Load from setup data (temporary storage during setup flow)
+        const savedSetupData = await AsyncStorage.getItem(
+          'health_profile_setup_data'
+        );
+        if (savedSetupData) {
+          const setupData = JSON.parse(savedSetupData);
+          if (setupData.demographics) {
+            setDemographics(setupData.demographics);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing demographics:', error);
+      }
+    };
+
+    loadExistingData();
+  }, [initialValue]);
 
   // 🔄 Mark step as complete in HealthProfileSetupScreen
   const markStepComplete = async (stepId: string) => {
@@ -145,17 +178,54 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
 
     setIsLoading(true);
     try {
-      // TODO: Save to database
-      console.log('💾 Saving demographics:', demographics);
+      // Save to health profile with proper timestamps
+      const demographicsData: Demographics = {
+        ageRange: demographics.ageRange!,
+        biologicalSex: demographics.biologicalSex!,
+        displayName: demographics.displayName,
+        pregnancyStatus: demographics.pregnancyStatus,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
 
-      // Simulate save
-      await new Promise(resolve => setTimeout(resolve, 500));
+      console.log('💾 Saving demographics:', demographicsData);
+
+      // 1. Save to setupData (temporary storage during setup flow)
+      const savedSetupData = await AsyncStorage.getItem(
+        'health_profile_setup_data'
+      );
+      const setupData = savedSetupData ? JSON.parse(savedSetupData) : {};
+      setupData.demographics = demographicsData;
+      await AsyncStorage.setItem(
+        'health_profile_setup_data',
+        JSON.stringify(setupData)
+      );
+
+      // 2. Save to encrypted local storage via useHealthProfile hook
+      const result = await updateDemographics(demographicsData);
+
+      if (result.error) {
+        throw new Error(
+          typeof result.error === 'string'
+            ? result.error
+            : 'Failed to save demographics'
+        );
+      }
 
       // Mark demographics step as complete and advance to next step
       await markStepComplete('demographics');
 
-      // No success popup - user continues to next step seamlessly
-      navigation.goBack();
+      console.log('✅ Demographics saved successfully');
+
+      // 🔧 FIX: Navigate to next step automatically instead of just going back
+      const fromSetup = route?.params?.fromSetup;
+      if (fromSetup) {
+        // Navigate to next step in the setup flow
+        navigation.navigate('HealthGoalsScreen', { fromSetup: true });
+      } else {
+        // Regular navigation back to profile
+        navigation.goBack();
+      }
     } catch (error) {
       console.error('Error saving demographics:', error);
       Alert.alert('Error', 'Failed to save information. Please try again.');
@@ -294,8 +364,27 @@ export const DemographicsScreen: React.FC<DemographicsScreenProps> = ({
             Different age groups have different supplement needs and safety
             considerations
           </Text>
-          <View style={styles.optionsContainer}>
-            {ageRanges.map(renderAgeOption)}
+          <View style={styles.pickerContainer}>
+            {/* Use Picker for compact dropdown UI */}
+            {/* @ts-ignore: Picker import for cross-platform */}
+
+            <Picker
+              selectedValue={demographics.ageRange || ''}
+              onValueChange={value =>
+                setDemographics(prev => ({ ...prev, ageRange: value }))
+              }
+              style={styles.picker}
+              accessibilityLabel="Select your age range"
+            >
+              <Picker.Item label="Select age range..." value="" />
+              {ageRanges.map(option => (
+                <Picker.Item
+                  key={option.value}
+                  label={option.label}
+                  value={option.value}
+                />
+              ))}
+            </Picker>
           </View>
         </View>
 

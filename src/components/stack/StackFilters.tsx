@@ -8,7 +8,7 @@ import {
   Modal,
   ScrollView,
 } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { OptimizedIcon } from '../common/OptimizedIcon';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 export type SortOption = 'name' | 'brand' | 'type' | 'dateAdded';
@@ -73,7 +73,12 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
             style={styles.filterButton}
             onPress={() => setShowModal(true)}
           >
-            <MaterialIcons name="tune" size={20} color={COLORS.primary} />
+            <OptimizedIcon
+              type="material"
+              name="tune"
+              size={20}
+              color={COLORS.primary}
+            />
             <Text style={styles.filterButtonText}>Sort & Filter</Text>
           </TouchableOpacity>
 
@@ -82,7 +87,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
               <View style={styles.activeFilter}>
                 <Text style={styles.activeFilterText}>{getFilterLabel()}</Text>
                 <TouchableOpacity onPress={() => onFilterChange('all')}>
-                  <MaterialIcons
+                  <OptimizedIcon
+                    type="material"
                     name="close"
                     size={16}
                     color={COLORS.textSecondary}
@@ -107,7 +113,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
               onPress={() => setShowModal(false)}
               style={styles.backButton}
             >
-              <MaterialIcons
+              <OptimizedIcon
+                type="material"
                 name="arrow-back"
                 size={24}
                 color={COLORS.textPrimary}
@@ -135,7 +142,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
                   ]}
                   onPress={() => onSortChange(option.value)}
                 >
-                  <MaterialIcons
+                  <OptimizedIcon
+                    type="material"
                     name={option.icon as any}
                     size={20}
                     color={
@@ -153,7 +161,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
                     {option.label}
                   </Text>
                   {sortBy === option.value && (
-                    <MaterialIcons
+                    <OptimizedIcon
+                      type="material"
                       name="check"
                       size={20}
                       color={COLORS.primary}
@@ -175,7 +184,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
                   ]}
                   onPress={() => onFilterChange(option.value)}
                 >
-                  <MaterialIcons
+                  <OptimizedIcon
+                    type="material"
                     name={option.icon as any}
                     size={20}
                     color={
@@ -193,7 +203,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
                     {option.label}
                   </Text>
                   {filterBy === option.value && (
-                    <MaterialIcons
+                    <OptimizedIcon
+                      type="material"
                       name="check"
                       size={20}
                       color={COLORS.primary}
@@ -212,7 +223,8 @@ export const StackFilters: React.FC<StackFiltersProps> = ({
                   onFilterChange('all');
                 }}
               >
-                <MaterialIcons
+                <OptimizedIcon
+                  type="material"
                   name="refresh"
                   size={20}
                   color={COLORS.textSecondary}

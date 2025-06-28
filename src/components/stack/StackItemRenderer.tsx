@@ -1,8 +1,8 @@
 // src/components/stack/StackItemRenderer.tsx
 import React from 'react';
-import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
-import { AnimatedTouchable } from '../common';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { OptimizedIcon } from '../common/OptimizedIcon';
+import { AnimatedTouchable, OptimizedImage } from '../common';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { UserStack } from '../../types';
 
@@ -30,10 +30,22 @@ export const StackItemRenderer: React.FC<StackItemRendererProps> = ({
     >
       {/* Item Image */}
       {item.imageUrl ? (
-        <Image source={{ uri: item.imageUrl }} style={styles.itemImage} />
+        <OptimizedImage
+          source={{ uri: item.imageUrl }}
+          style={styles.itemImage}
+          priority="normal"
+          contentFit="contain"
+          fallbackIcon="cube-outline"
+          fallbackIconSize={24}
+        />
       ) : (
         <View style={styles.itemImagePlaceholder}>
-          <Ionicons name="cube-outline" size={24} color={COLORS.gray400} />
+          <OptimizedIcon
+            type="ion"
+            name="cube-outline"
+            size={24}
+            color={COLORS.gray400}
+          />
         </View>
       )}
 
@@ -60,7 +72,12 @@ export const StackItemRenderer: React.FC<StackItemRendererProps> = ({
         style={styles.removeButton}
         hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       >
-        <MaterialIcons name="close" size={20} color={COLORS.error} />
+        <OptimizedIcon
+          type="material"
+          name="close"
+          size={20}
+          color={COLORS.error}
+        />
       </TouchableOpacity>
     </AnimatedTouchable>
   );
@@ -85,7 +102,6 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 8,
     marginRight: SPACING.md,
-    resizeMode: 'contain',
   },
   itemImagePlaceholder: {
     width: 50,

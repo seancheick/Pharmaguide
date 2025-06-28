@@ -1,6 +1,7 @@
 // src/components/scan/ScoreDisplay.tsx
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { AnimatedScore } from '../common/AnimatedCounter';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { ProductAnalysis } from '../../types';
 
@@ -39,7 +40,12 @@ export const ScoreDisplay: React.FC<ScoreDisplayProps> = ({ analysis }) => {
               { backgroundColor: getScoreColor(analysis.overallScore) },
             ]}
           >
-            <Text style={styles.scoreValue}>{analysis.overallScore}</Text>
+            <AnimatedScore
+              score={analysis.overallScore}
+              style={styles.scoreValue}
+              getScoreColor={getScoreColor}
+              duration={800}
+            />
           </View>
         </View>
         <Text
@@ -51,8 +57,8 @@ export const ScoreDisplay: React.FC<ScoreDisplayProps> = ({ analysis }) => {
           {getScoreLabel(analysis.overallScore)}
         </Text>
         <Text style={styles.scoreDescription}>
-          Based on ingredient quality, bioavailability, dosage optimization,
-          and purity standards
+          Based on ingredient quality, bioavailability, dosage optimization, and
+          purity standards
         </Text>
       </View>
 
@@ -60,29 +66,27 @@ export const ScoreDisplay: React.FC<ScoreDisplayProps> = ({ analysis }) => {
       {analysis.categoryScores && (
         <View style={styles.categoryCard}>
           <Text style={styles.categoryTitle}>Detailed Breakdown</Text>
-          {Object.entries(analysis.categoryScores).map(
-            ([category, score]) => (
-              <View key={`category-${category}`} style={styles.categoryRow}>
-                <Text style={styles.categoryName}>
-                  {category.charAt(0).toUpperCase() + category.slice(1)}
-                </Text>
-                <View style={styles.categoryScoreContainer}>
-                  <View style={styles.categoryScoreBar}>
-                    <View
-                      style={[
-                        styles.categoryScoreFill,
-                        {
-                          width: `${score}%`,
-                          backgroundColor: getScoreColor(score),
-                        },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.categoryScore}>{score}</Text>
+          {Object.entries(analysis.categoryScores).map(([category, score]) => (
+            <View key={`category-${category}`} style={styles.categoryRow}>
+              <Text style={styles.categoryName}>
+                {category.charAt(0).toUpperCase() + category.slice(1)}
+              </Text>
+              <View style={styles.categoryScoreContainer}>
+                <View style={styles.categoryScoreBar}>
+                  <View
+                    style={[
+                      styles.categoryScoreFill,
+                      {
+                        width: `${score}%`,
+                        backgroundColor: getScoreColor(score),
+                      },
+                    ]}
+                  />
                 </View>
+                <Text style={styles.categoryScore}>{score}</Text>
               </View>
-            )
-          )}
+            </View>
+          ))}
         </View>
       )}
     </View>

@@ -102,38 +102,50 @@ export class LocalHealthProfileService {
   async getHealthProfile(userId: string): Promise<LocalHealthProfile | null> {
     try {
       const profiles = await secureStorage.getHealthData(userId, this.DATA_TYPE);
-      
+
       if (profiles.length === 0) {
+        console.log(`ℹ️ No health profile found for user ${userId}`);
         return null;
       }
 
-      // Return the most recent profile
-      const profile = profiles[0] as any; // In real implementation, this would be decrypted
-      
+      // Return the most recent profile (profiles are sorted by updated_at DESC)
+      const profileData = profiles[0];
+
+      console.log(`✅ Found health profile for user ${userId}:`, {
+        id: profileData.id,
+        hasDemo: !!profileData.demographics,
+        hasGoals: !!profileData.goals,
+        hasConditions: !!profileData.conditions,
+        hasAllergies: !!profileData.allergies,
+        displayName: profileData.demographics?.displayName,
+      });
+
       // Log audit trail (no PHI in logs)
       this.logAuditEvent(userId, 'profile_accessed', {
-        profileId: profile.id,
+        profileId: profileData.id,
         timestamp: Date.now(),
       });
 
-      // For now, return a mock structure since we need full decryption implementation
-      return {
-        id: profile.id || `profile_${userId}`,
+      // Return the actual profile data (already decrypted by secureStorage.getHealthData)
+      const profile: LocalHealthProfile = {
+        id: profileData.id || `profile_${userId}`,
         userId,
-        version: 1,
-        createdAt: profile.createdAt || Date.now(),
-        updatedAt: profile.updatedAt || Date.now(),
-        isComplete: false,
-        demographics: {},
-        conditions: { conditions: [] },
-        allergies: { substances: [] },
-        goals: {},
-        privacy: {
+        version: profileData.version || 1,
+        createdAt: profileData.createdAt || Date.now(),
+        updatedAt: profileData.updatedAt || Date.now(),
+        isComplete: profileData.isComplete || false,
+        demographics: profileData.demographics || {},
+        conditions: profileData.conditions || { conditions: [] },
+        allergies: profileData.allergies || { substances: [] },
+        goals: profileData.goals || {},
+        privacy: profileData.privacy || {
           dataRetention: 'indefinite',
           analyticsOptIn: false,
           aiAnalysisOptIn: false, // Default to opt-out for HIPAA compliance
         },
       };
+
+      return profile;
     } catch (error) {
       console.error('❌ Failed to get health profile:', error);
       return null;

@@ -30,7 +30,7 @@ export class RateLimiter {
    * Check if request is allowed under rate limit
    */
   async isAllowed(userId?: string, action?: string): Promise<boolean> {
-    const key = this.config.keyGenerator 
+    const key = this.config.keyGenerator
       ? this.config.keyGenerator(userId, action)
       : `${userId || 'anonymous'}_${action || 'default'}`;
 
@@ -75,7 +75,7 @@ export class RateLimiter {
    * Get remaining requests for a key
    */
   getRemainingRequests(userId?: string, action?: string): number {
-    const key = this.config.keyGenerator 
+    const key = this.config.keyGenerator
       ? this.config.keyGenerator(userId, action)
       : `${userId || 'anonymous'}_${action || 'default'}`;
 
@@ -91,7 +91,7 @@ export class RateLimiter {
    * Get time until reset
    */
   getTimeUntilReset(userId?: string, action?: string): number {
-    const key = this.config.keyGenerator 
+    const key = this.config.keyGenerator
       ? this.config.keyGenerator(userId, action)
       : `${userId || 'anonymous'}_${action || 'default'}`;
 
@@ -105,7 +105,7 @@ export class RateLimiter {
    * Clear rate limit for a key
    */
   async clearLimit(userId?: string, action?: string): Promise<void> {
-    const key = this.config.keyGenerator 
+    const key = this.config.keyGenerator
       ? this.config.keyGenerator(userId, action)
       : `${userId || 'anonymous'}_${action || 'default'}`;
 
@@ -163,13 +163,13 @@ export const authRateLimiter = new RateLimiter({
 export const scanRateLimiter = new RateLimiter({
   maxRequests: 30,
   windowMs: 60 * 1000, // 1 minute
-  keyGenerator: (userId) => `scan_${userId || 'anonymous'}`,
+  keyGenerator: userId => `scan_${userId || 'anonymous'}`,
 });
 
 export const analysisRateLimiter = new RateLimiter({
   maxRequests: 20,
   windowMs: 60 * 1000, // 1 minute
-  keyGenerator: (userId) => `analysis_${userId || 'anonymous'}`,
+  keyGenerator: userId => `analysis_${userId || 'anonymous'}`,
 });
 
 export const apiRateLimiter = new RateLimiter({
@@ -179,15 +179,32 @@ export const apiRateLimiter = new RateLimiter({
 });
 
 /**
- * Security headers for API requests
+ * Enhanced security headers for API requests
  */
 export const getSecurityHeaders = (userId?: string): Record<string, string> => {
+  // Enhanced security headers based on OWASP recommendations
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Requested-With': 'XMLHttpRequest',
-    'Cache-Control': 'no-cache, no-store, must-revalidate',
-    'Pragma': 'no-cache',
-    'Expires': '0',
+    'Cache-Control': 'no-cache, no-store, must-revalidate, private',
+    Pragma: 'no-cache',
+    Expires: '0',
+
+    // OWASP Security Headers
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'X-XSS-Protection': '1; mode=block',
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
+    'X-Permitted-Cross-Domain-Policies': 'none',
+
+    // Content Security Policy for API requests
+    'Content-Security-Policy':
+      "default-src 'self'; script-src 'none'; object-src 'none'",
+
+    // Additional security headers
+    'Cross-Origin-Embedder-Policy': 'require-corp',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Cross-Origin-Resource-Policy': 'same-origin',
   };
 
   // Add user context if available (but don't expose sensitive data)
@@ -197,6 +214,10 @@ export const getSecurityHeaders = (userId?: string): Record<string, string> => {
 
   // Add timestamp for request freshness
   headers['X-Timestamp'] = Date.now().toString();
+
+  // Add request ID for tracking
+  headers['X-Request-ID'] =
+    `req_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
   return headers;
 };
@@ -225,7 +246,8 @@ export const validateRequest = (
   // Body size validation (prevent large payloads)
   if (body) {
     const bodySize = JSON.stringify(body).length;
-    if (bodySize > 1024 * 1024) { // 1MB limit
+    if (bodySize > 1024 * 1024) {
+      // 1MB limit
       return { isValid: false, error: 'Request body too large' };
     }
   }
@@ -243,7 +265,11 @@ export const secureFetch = async (
   action?: string
 ): Promise<Response> => {
   // Validate request
-  const validation = validateRequest(url, options.method || 'GET', options.body);
+  const validation = validateRequest(
+    url,
+    options.method || 'GET',
+    options.body
+  );
   if (!validation.isValid) {
     throw new Error(validation.error);
   }
@@ -252,7 +278,9 @@ export const secureFetch = async (
   const isAllowed = await apiRateLimiter.isAllowed(userId, action);
   if (!isAllowed) {
     const timeUntilReset = apiRateLimiter.getTimeUntilReset(userId, action);
-    throw new Error(`Rate limit exceeded. Try again in ${Math.ceil(timeUntilReset / 1000)} seconds.`);
+    throw new Error(
+      `Rate limit exceeded. Try again in ${Math.ceil(timeUntilReset / 1000)} seconds.`
+    );
   }
 
   // Add security headers
@@ -298,10 +326,13 @@ export const secureFetch = async (
  * Clean up rate limiters periodically
  */
 export const startRateLimitCleanup = (): void => {
-  setInterval(() => {
-    authRateLimiter.cleanup();
-    scanRateLimiter.cleanup();
-    analysisRateLimiter.cleanup();
-    apiRateLimiter.cleanup();
-  }, 5 * 60 * 1000); // Clean up every 5 minutes
+  setInterval(
+    () => {
+      authRateLimiter.cleanup();
+      scanRateLimiter.cleanup();
+      analysisRateLimiter.cleanup();
+      apiRateLimiter.cleanup();
+    },
+    5 * 60 * 1000
+  ); // Clean up every 5 minutes
 };

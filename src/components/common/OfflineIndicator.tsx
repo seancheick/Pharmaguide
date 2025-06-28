@@ -12,8 +12,8 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { useNetworkState } from '../../hooks/useNetworkState';
+import { OptimizedIcon } from './OptimizedIcon';
 
 interface OfflineIndicatorProps {
   style?: any;
@@ -119,7 +119,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
         onPress={() => setShowModal(true)}
         disabled={!showDetails}
       >
-        <Ionicons
+        <OptimizedIcon
+          type="ion"
           name={statusConfig.icon}
           size={16}
           color={statusConfig.color}
@@ -144,7 +145,7 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
         <View style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <TouchableOpacity onPress={() => setShowModal(false)}>
-              <Ionicons name="close" size={24} color="#666" />
+              <OptimizedIcon type="ion" name="close" size={24} color="#666" />
             </TouchableOpacity>
             <Text style={styles.modalTitle}>Network Status</Text>
             <View style={styles.placeholder} />
@@ -155,7 +156,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Current Status</Text>
               <View style={styles.statusRow}>
-                <Ionicons
+                <OptimizedIcon
+                  type="ion"
                   name={statusConfig.icon}
                   size={24}
                   color={statusConfig.color}
@@ -197,7 +199,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
                   onPress={handleSync}
                   disabled={syncing}
                 >
-                  <Ionicons
+                  <OptimizedIcon
+                    type="ion"
                     name={syncing ? 'sync' : 'cloud-upload'}
                     size={20}
                     color="#FFFFFF"
@@ -213,7 +216,12 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
                   style={[styles.actionButton, styles.clearButton]}
                   onPress={handleClearQueue}
                 >
-                  <Ionicons name="trash" size={20} color="#FF3B30" />
+                  <OptimizedIcon
+                    type="ion"
+                    name="trash"
+                    size={20}
+                    color="#FF3B30"
+                  />
                   <Text style={[styles.actionButtonText, { color: '#FF3B30' }]}>
                     Clear Queue
                   </Text>
@@ -289,7 +297,8 @@ interface FeatureItemProps {
 
 const FeatureItem: React.FC<FeatureItemProps> = ({ available, text }) => (
   <View style={styles.featureItem}>
-    <Ionicons
+    <OptimizedIcon
+      type="ion"
       name={available ? 'checkmark-circle' : 'close-circle'}
       size={16}
       color={available ? '#34C759' : '#FF3B30'}

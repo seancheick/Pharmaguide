@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { config } from '../../config';
+import { crashReporting, logger } from '../../services/monitoring';
 
 interface Props {
   children: ReactNode;
@@ -48,6 +49,23 @@ export class ErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     // Log error details
     this.setState({ errorInfo });
+
+    // Report to monitoring services
+    logger.error('ui', 'React Error Boundary caught error', error, {
+      componentStack: errorInfo.componentStack,
+      errorBoundary: this.constructor.name,
+    });
+
+    crashReporting.reportError({
+      ...error,
+      context: {
+        componentStack: errorInfo.componentStack,
+        errorBoundary: this.constructor.name,
+        props: this.props.resetKeys,
+      },
+      severity: 'high',
+      category: 'ui',
+    });
 
     // Call custom error handler if provided
     this.props.onError?.(error, errorInfo);
@@ -144,10 +162,13 @@ export class ErrorBoundary extends Component<Props, State> {
         return this.props.fallback;
       }
 
-      // Default error UI
+      // Default error UI with retry functionality
       return (
         <View style={styles.container}>
           <ScrollView contentContainerStyle={styles.content}>
+            <View style={styles.iconContainer}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+            </View>
             <Text style={styles.title}>Oops! Something went wrong</Text>
             <Text style={styles.message}>
               We're sorry, but something unexpected happened. The error has been
@@ -207,6 +228,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  iconContainer: {
+    marginBottom: 16,
+  },
+  errorIcon: {
+    fontSize: 48,
+    textAlign: 'center',
   },
   title: {
     fontSize: 24,

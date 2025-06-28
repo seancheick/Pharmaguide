@@ -8,6 +8,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { AnimatedScore } from '../common/AnimatedCounter';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { UserStack, StackInteractionResult } from '../../types';
 
@@ -37,7 +38,6 @@ export const UnifiedGamificationCard: React.FC<
   showUpgradePrompt = false,
 }) => {
   // Animation refs
-  const scoreAnimatedValue = useRef(new Animated.Value(0)).current;
   const progressAnimatedValue = useRef(new Animated.Value(0)).current;
 
   // Calculate stack health score
@@ -129,21 +129,14 @@ export const UnifiedGamificationCard: React.FC<
     return null;
   }
 
-  // Animate score and progress when they change
+  // Animate progress when it changes
   useEffect(() => {
-    Animated.parallel([
-      Animated.timing(scoreAnimatedValue, {
-        toValue: stackHealthScore,
-        duration: 1000,
-        useNativeDriver: false,
-      }),
-      Animated.timing(progressAnimatedValue, {
-        toValue: progress,
-        duration: 800,
-        useNativeDriver: false,
-      }),
-    ]).start();
-  }, [stackHealthScore, progress, scoreAnimatedValue, progressAnimatedValue]);
+    Animated.timing(progressAnimatedValue, {
+      toValue: progress,
+      duration: 800,
+      useNativeDriver: false,
+    }).start();
+  }, [progress, progressAnimatedValue]);
 
   return (
     <View style={styles.container}>
@@ -166,14 +159,14 @@ export const UnifiedGamificationCard: React.FC<
         {/* Stack Health Score - Prominent Display */}
         <View style={styles.scoreSection}>
           <View style={styles.scoreContainer}>
-            <Animated.Text style={[styles.scoreValue, { color: scoreColor }]}>
-              {scoreAnimatedValue.interpolate({
-                inputRange: [0, 100],
-                outputRange: ['0', '100'],
-                extrapolate: 'clamp',
-              })}
-            </Animated.Text>
-            <Text style={styles.scoreLabel}>{scoreLabel}</Text>
+            <AnimatedScore
+              score={stackHealthScore}
+              style={[styles.scoreValue, { color: scoreColor }]}
+              getScoreColor={getScoreColor}
+              showLabel={true}
+              getScoreLabel={getScoreLabel}
+              duration={1000}
+            />
           </View>
           <View style={styles.scoreInfo}>
             <Text style={styles.scoreTitle}>Stack Health Score</Text>

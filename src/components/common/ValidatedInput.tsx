@@ -10,12 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
-import { ValidationResult, validateEmail, validatePassword, validateText } from '../../utils/validation';
+import {
+  ValidationResult,
+  validateEmail,
+  validatePassword,
+  validateText,
+} from '../../utils/validation';
 import { sanitizeText } from '../../utils/sanitization';
 
 export type ValidationType = 'email' | 'password' | 'text' | 'none';
 
-interface ValidatedInputProps extends Omit<TextInputProps, 'onChangeText' | 'onBlur'> {
+interface ValidatedInputProps
+  extends Omit<TextInputProps, 'onChangeText' | 'onBlur'> {
   label?: string;
   error?: string;
   warning?: string;
@@ -54,48 +60,65 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
   const [internalValue, setInternalValue] = useState(props.value || '');
   const [touched, setTouched] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [validationResult, setValidationResult] = useState<ValidationResult>({ isValid: true });
+  const [validationResult, setValidationResult] = useState<ValidationResult>({
+    isValid: true,
+  });
 
-  const validate = useCallback((value: string): ValidationResult => {
-    if (!value && !required) {
-      return { isValid: true };
-    }
-
-    switch (validationType) {
-      case 'email':
-        return validateEmail(value);
-      case 'password':
-        return validatePassword(value, confirmPassword);
-      case 'text':
-        return validateText(value, label || 'Field', {
-          required,
-          maxLength,
-        });
-      case 'none':
-      default:
+  const validate = useCallback(
+    (value: string): ValidationResult => {
+      if (!value && !required) {
         return { isValid: true };
-    }
-  }, [validationType, required, maxLength, label, confirmPassword]);
+      }
 
-  const handleChangeText = useCallback((text: string) => {
-    let processedText = text;
+      switch (validationType) {
+        case 'email':
+          return validateEmail(value);
+        case 'password':
+          return validatePassword(value, confirmPassword);
+        case 'text':
+          return validateText(value, label || 'Field', {
+            required,
+            maxLength,
+          });
+        case 'none':
+        default:
+          return { isValid: true };
+      }
+    },
+    [validationType, required, maxLength, label, confirmPassword]
+  );
 
-    // Sanitize input if enabled
-    if (sanitizeInput && validationType !== 'password') {
-      processedText = sanitizeText(text, { maxLength });
-    }
+  const handleChangeText = useCallback(
+    (text: string) => {
+      let processedText = text;
 
-    setInternalValue(processedText);
+      // Sanitize input if enabled
+      if (sanitizeInput && validationType !== 'password') {
+        processedText = sanitizeText(text, { maxLength });
+      }
 
-    // Validate on change if enabled and field has been touched
-    if (validateOnChange && touched) {
-      const result = validate(processedText);
-      setValidationResult(result);
-      onValidation?.(result);
-    }
+      setInternalValue(processedText);
 
-    onChangeText?.(processedText);
-  }, [sanitizeInput, validationType, maxLength, validateOnChange, touched, validate, onValidation, onChangeText]);
+      // Validate on change if enabled and field has been touched
+      if (validateOnChange && touched) {
+        const result = validate(processedText);
+        setValidationResult(result);
+        onValidation?.(result);
+      }
+
+      onChangeText?.(processedText);
+    },
+    [
+      sanitizeInput,
+      validationType,
+      maxLength,
+      validateOnChange,
+      touched,
+      validate,
+      onValidation,
+      onChangeText,
+    ]
+  );
 
   const handleBlur = useCallback(() => {
     setTouched(true);
@@ -124,19 +147,34 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
   const isPasswordField = validationType === 'password' || secureTextEntry;
 
   return (
-    <View style={styles.container}>
+    <View
+      style={style}
+      accessible
+      accessibilityLabel={label}
+      accessibilityHint={props.placeholder}
+    >
       {label && (
-        <Text style={[styles.label, hasError && styles.labelError]}>
+        <Text
+          style={styles.label}
+          accessibilityRole="text"
+          accessibilityLabel={label + (required ? ' (required)' : '')}
+        >
           {label}
-          {required && <Text style={styles.required}> *</Text>}
+          {required && (
+            <Text accessibilityLabel="required" style={{ color: COLORS.error }}>
+              {' '}
+              *
+            </Text>
+          )}
         </Text>
       )}
-      
-      <View style={[
-        styles.inputContainer,
-        hasError && styles.inputContainerError,
-        hasWarning && styles.inputContainerWarning,
-      ]}>
+      <View
+        style={[
+          styles.inputContainer,
+          hasError && styles.inputContainerError,
+          hasWarning && styles.inputContainerWarning,
+        ]}
+      >
         <TextInput
           {...props}
           style={[
@@ -151,35 +189,48 @@ export const ValidatedInput: React.FC<ValidatedInputProps> = ({
           secureTextEntry={isPasswordField && !showPassword}
           placeholderTextColor={COLORS.textTertiary}
           maxLength={maxLength}
+          accessible
+          accessibilityLabel={label}
+          accessibilityHint={props.placeholder}
+          accessibilityState={{ invalid: !!error, required }}
+          accessibilityRole="textbox"
         />
-        
+
         {isPasswordField && showPasswordToggle && (
           <TouchableOpacity
             onPress={togglePasswordVisibility}
             style={styles.passwordToggle}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessible
+            accessibilityRole="button"
+            accessibilityLabel={
+              showPassword ? 'Hide password' : 'Show password'
+            }
           >
             <Ionicons
               name={showPassword ? 'eye-off' : 'eye'}
               size={20}
               color={COLORS.textSecondary}
+              accessibilityIgnoresInvertColors
             />
           </TouchableOpacity>
         )}
       </View>
 
       {displayError && (
-        <View style={styles.messageContainer}>
-          <Ionicons name="alert-circle" size={16} color={COLORS.error} />
-          <Text style={styles.errorText}>{displayError}</Text>
-        </View>
+        <Text
+          style={styles.errorText}
+          accessibilityLiveRegion="polite"
+          accessibilityRole="alert"
+        >
+          {displayError}
+        </Text>
       )}
 
       {displayWarning && !hasError && (
-        <View style={styles.messageContainer}>
-          <Ionicons name="warning" size={16} color={COLORS.warning} />
-          <Text style={styles.warningText}>{displayWarning}</Text>
-        </View>
+        <Text style={styles.warningText} accessibilityLiveRegion="polite">
+          {displayWarning}
+        </Text>
       )}
 
       {maxLength && internalValue.length > maxLength * 0.8 && (
@@ -240,11 +291,6 @@ const styles = StyleSheet.create({
   passwordToggle: {
     padding: SPACING.sm,
     marginRight: SPACING.xs,
-  },
-  messageContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: SPACING.xs,
   },
   errorText: {
     fontSize: TYPOGRAPHY.sizes.sm,

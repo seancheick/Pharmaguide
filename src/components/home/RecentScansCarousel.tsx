@@ -1,5 +1,5 @@
 // src/components/home/RecentScansCarousel.tsx
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   View,
   Text,
@@ -7,10 +7,11 @@ import {
   FlatList,
   TouchableOpacity,
   ActivityIndicator,
+  ViewToken,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { SupplementCard } from './SupplementCard';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { SupplementCard } from './SupplementCard';
 
 interface RecentScan {
   id: string;
@@ -40,6 +41,23 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
   onScanAnother,
   onHelpfulClick,
 }) => {
+  // Visibility tracking for performance optimization
+  const [visibleItems, setVisibleItems] = useState(new Set<string>());
+
+  const onViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      const newVisibleItems = new Set(
+        viewableItems.map(item => item.item?.id).filter(Boolean)
+      );
+      setVisibleItems(newVisibleItems);
+    },
+    []
+  );
+
+  const viewabilityConfig = {
+    itemVisiblePercentThreshold: 50, // Item is considered visible when 50% is shown
+    minimumViewTime: 100, // Minimum time item must be visible
+  };
   const convertScanToSupplement = (scan: RecentScan) => ({
     id: scan.id,
     name: scan.name,
@@ -47,9 +65,11 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
     imageUrl: scan.imageUrl,
     rating: scan.score / 20, // Convert 0-100 score to 0-5 rating
     score: scan.score,
-    riskStatus: scan.hasInteraction 
-      ? (scan.score < 60 ? 'High Risk' : 'Caution')
-      : 'Safe' as 'Safe' | 'Caution' | 'High Risk',
+    riskStatus: scan.hasInteraction
+      ? scan.score < 60
+        ? 'High Risk'
+        : 'Caution'
+      : ('Safe' as 'Safe' | 'Caution' | 'High Risk'),
     evidence: scan.evidence,
     dosage: scan.dosage,
     description: scan.description,
@@ -57,7 +77,7 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
 
   const renderScanCard = ({ item }: { item: RecentScan }) => {
     const supplement = convertScanToSupplement(item);
-    
+
     return (
       <SupplementCard
         supplement={supplement}
@@ -76,7 +96,7 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
       <Text style={styles.emptySubtitle}>
         Start scanning supplements to see them here
       </Text>
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.scanButton}
         onPress={onScanAnother}
         activeOpacity={0.8}
@@ -114,6 +134,12 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
     );
   }
 
+  // Debug log to check data
+  console.log('Recent scans passed to carousel:', recentScans);
+
+  // Limit carousel to 10 items
+  const carouselScans = recentScans.slice(0, 10);
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -123,21 +149,38 @@ export const RecentScansCarousel: React.FC<RecentScansCarouselProps> = ({
             <Text style={styles.seeAllText}>Scan Another</Text>
           </TouchableOpacity>
         )}
+        {recentScans.length > 10 && (
+          <TouchableOpacity onPress={() => alert('Show more scans (TODO: implement modal/screen)')}>
+            <Text style={styles.seeAllText}>View More</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {recentScans.length === 0 ? (
         renderEmptyState()
       ) : (
         <FlatList
-          data={recentScans}
+          data={carouselScans}
           renderItem={renderScanCard}
-          keyExtractor={(item) => item.id}
+          keyExtractor={item => item.id}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.listContainer}
           snapToInterval={320 + SPACING.sm} // Card width + margin
           decelerationRate="fast"
           snapToAlignment="start"
+          // Performance optimizations
+          onViewableItemsChanged={onViewableItemsChanged}
+          viewabilityConfig={viewabilityConfig}
+          removeClippedSubviews={true}
+          maxToRenderPerBatch={3}
+          windowSize={5}
+          initialNumToRender={2}
+          getItemLayout={(_, index) => ({
+            length: 320 + SPACING.sm,
+            offset: (320 + SPACING.sm) * index,
+            index,
+          })}
         />
       )}
     </View>

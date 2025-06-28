@@ -1,7 +1,10 @@
 // src/services/ai/AICache.ts
 // Intelligent AI Response Caching with Performance Optimization
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import pako from 'pako';
+import { storageAdapter } from '../storage/storageAdapter';
+import { supabase } from '../../supabase/client';
+import { APP_CONFIG } from '../../constants';
 
 interface CacheEntry<T> {
   data: T;
@@ -19,7 +22,7 @@ interface CacheConfig {
   defaultTTL: number; // Default time to live in ms
   maxEntries: number; // Maximum number of entries
   compressionThreshold: number; // Compress entries larger than this
-  persistToDisk: boolean; // Whether to persist cache to AsyncStorage
+  persistToDisk: boolean; // Whether to persist cache to storage
 }
 
 interface CacheStats {
@@ -33,9 +36,6 @@ interface CacheStats {
   averageResponseTime: number;
 }
 
-/**
- * Intelligent AI response caching with LRU eviction and performance optimization
- */
 export class AICache {
   private cache: Map<string, CacheEntry<any>> = new Map();
   private config: CacheConfig;
@@ -45,12 +45,12 @@ export class AICache {
 
   constructor(config?: Partial<CacheConfig>) {
     this.config = {
-      maxSize: 50 * 1024 * 1024, // 50MB default
-      defaultTTL: 24 * 60 * 60 * 1000, // 24 hours
-      maxEntries: 1000,
+      maxSize: 100 * 1024 * 1024, // 100MB to support product/source data
+      defaultTTL: APP_CONFIG.CACHE_DURATION_HOURS * 60 * 60 * 1000, // Use index.ts config (24 hours)
+      maxEntries: 2000, // Increased for product/source caching
       compressionThreshold: 10 * 1024, // 10KB
-      persistToDisk: true,
-      ...config
+      persistToDisk: APP_CONFIG.HIPAA_LOCAL_ONLY, // Align with HIPAA compliance
+      ...config,
     };
 
     this.stats = {
@@ -61,7 +61,7 @@ export class AICache {
       totalMisses: 0,
       currentSize: 0,
       entryCount: 0,
-      averageResponseTime: 0
+      averageResponseTime: 0,
     };
 
     this.initializeCache();
@@ -75,7 +75,7 @@ export class AICache {
     this.stats.totalRequests++;
 
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       this.stats.totalMisses++;
       this.updateStats();
@@ -107,18 +107,27 @@ export class AICache {
 
     // Update average response time
     const responseTime = Date.now() - startTime;
-    this.stats.averageResponseTime = 
-      (this.stats.averageResponseTime * (this.stats.totalRequests - 1) + responseTime) / this.stats.totalRequests;
+    this.stats.averageResponseTime =
+      (this.stats.averageResponseTime * (this.stats.totalRequests - 1) +
+        responseTime) /
+      this.stats.totalRequests;
 
     return this.deserializeData(entry.data);
+  }
+
+  /**
+   * Get multiple cache entries in batch
+   */
+  async getBatch<T>(keys: string[], tags?: string[]): Promise<(T | null)[]> {
+    return Promise.all(keys.map(key => this.get<T>(key, tags)));
   }
 
   /**
    * Set cached data with intelligent storage
    */
   async set<T>(
-    key: string, 
-    data: T, 
+    key: string,
+    data: T,
     options?: {
       ttl?: number;
       quality?: number;
@@ -146,7 +155,7 @@ export class AICache {
       lastAccessed: Date.now(),
       quality,
       size: estimatedSize,
-      tags
+      tags,
     };
 
     this.cache.set(key, entry);
@@ -161,11 +170,31 @@ export class AICache {
   }
 
   /**
+   * Set multiple cache entries in batch
+   */
+  async setBatch<T>(
+    entries: {
+      key: string;
+      data: T;
+      options?: {
+        ttl?: number;
+        quality?: number;
+        tags?: string[];
+        priority?: 'low' | 'normal' | 'high';
+      };
+    }[]
+  ): Promise<void> {
+    await Promise.all(
+      entries.map(({ key, data, options }) => this.set(key, data, options))
+    );
+  }
+
+  /**
    * Invalidate cache entries by tags
    */
   invalidateByTags(tags: string[]): number {
     let invalidatedCount = 0;
-    
+
     for (const [key, entry] of this.cache.entries()) {
       if (entry.tags.some(tag => tags.includes(tag))) {
         this.stats.currentSize -= entry.size;
@@ -176,6 +205,15 @@ export class AICache {
 
     this.stats.entryCount = this.cache.size;
     return invalidatedCount;
+  }
+
+  /**
+   * Invalidate cache entries by data type
+   */
+  async invalidateByType(
+    type: 'product' | 'source' | 'nutrient' | 'analysis' | 'safety'
+  ): Promise<number> {
+    return this.invalidateByTags([type]);
   }
 
   /**
@@ -212,14 +250,14 @@ export class AICache {
   /**
    * Get cache entries for debugging
    */
-  getEntries(): Array<{
+  getEntries(): {
     key: string;
     size: number;
     accessCount: number;
     quality: number;
     age: number;
     tags: string[];
-  }> {
+  }[] {
     const now = Date.now();
     return Array.from(this.cache.entries()).map(([key, entry]) => ({
       key,
@@ -227,8 +265,27 @@ export class AICache {
       accessCount: entry.accessCount,
       quality: entry.quality,
       age: now - entry.timestamp,
-      tags: entry.tags
+      tags: entry.tags,
     }));
+  }
+
+  /**
+   * Log cache health metrics to Supabase
+   */
+  async logCacheHealth(): Promise<void> {
+    try {
+      const stats = this.getStats();
+      await supabase.from('analytics_events').insert({
+        user_id: 'system',
+        action: 'cache_health',
+        metadata: {
+          ...stats,
+          timestamp: new Date().toISOString(),
+        },
+      });
+    } catch (error) {
+      console.error('Failed to log cache health:', error);
+    }
   }
 
   /**
@@ -245,15 +302,23 @@ export class AICache {
     const scoredEntries = entries.map(([key, entry]) => {
       const age = now - entry.timestamp;
       const timeSinceAccess = now - entry.lastAccessed;
-      
+
       // Scoring factors
       const qualityScore = entry.quality * 30;
       const accessScore = Math.min(entry.accessCount * 5, 25);
-      const freshnessScore = Math.max(0, 20 - (age / (60 * 60 * 1000))); // Decay over hours
-      const recentAccessScore = Math.max(0, 15 - (timeSinceAccess / (60 * 60 * 1000)));
-      const sizeScore = Math.max(0, 10 - (entry.size / (1024 * 1024))); // Penalty for large entries
+      const freshnessScore = Math.max(0, 20 - age / (60 * 60 * 1000)); // Decay over hours
+      const recentAccessScore = Math.max(
+        0,
+        15 - timeSinceAccess / (60 * 60 * 1000)
+      );
+      const sizeScore = Math.max(0, 10 - entry.size / (1024 * 1024)); // Penalty for large entries
 
-      const totalScore = qualityScore + accessScore + freshnessScore + recentAccessScore + sizeScore;
+      const totalScore =
+        qualityScore +
+        accessScore +
+        freshnessScore +
+        recentAccessScore +
+        sizeScore;
 
       return { key, entry, score: totalScore };
     });
@@ -268,7 +333,7 @@ export class AICache {
 
     if (this.stats.currentSize > removalThreshold) {
       const toRemove = Math.ceil(scoredEntries.length * 0.2);
-      
+
       for (let i = 0; i < toRemove && i < scoredEntries.length; i++) {
         const { key, entry } = scoredEntries[i];
         this.cache.delete(key);
@@ -290,15 +355,14 @@ export class AICache {
     if (!this.config.persistToDisk) return;
 
     try {
-      const cacheData = await AsyncStorage.getItem('ai_cache');
+      await storageAdapter.initialize();
+      const cacheData = await storageAdapter.getItem('ai_cache');
       if (cacheData) {
         const parsed = JSON.parse(cacheData);
         const now = Date.now();
 
         for (const [key, entry] of Object.entries(parsed)) {
           const cacheEntry = entry as CacheEntry<any>;
-          
-          // Skip expired entries
           if (cacheEntry.expiresAt > now) {
             this.cache.set(key, cacheEntry);
             this.stats.currentSize += cacheEntry.size;
@@ -321,7 +385,7 @@ export class AICache {
 
     try {
       const cacheData = Object.fromEntries(this.cache.entries());
-      await AsyncStorage.setItem('ai_cache', JSON.stringify(cacheData));
+      await storageAdapter.setItem('ai_cache', JSON.stringify(cacheData));
     } catch (error) {
       console.error('Failed to save cache to storage:', error);
     }
@@ -331,71 +395,88 @@ export class AICache {
 
   private async initializeCache(): Promise<void> {
     await this.loadFromStorage();
-    
-    // Start periodic optimization
-    setInterval(() => {
-      this.optimize();
-    }, 5 * 60 * 1000); // Every 5 minutes
+
+    // Start periodic optimization and health logging
+    setInterval(
+      () => {
+        this.optimize();
+        this.logCacheHealth();
+      },
+      5 * 60 * 1000
+    ); // Every 5 minutes
   }
 
   private updateStats(): void {
-    this.stats.hitRate = this.stats.totalRequests > 0 
-      ? this.stats.totalHits / this.stats.totalRequests 
-      : 0;
+    this.stats.hitRate =
+      this.stats.totalRequests > 0
+        ? this.stats.totalHits / this.stats.totalRequests
+        : 0;
     this.stats.missRate = 1 - this.stats.hitRate;
   }
 
   private hasInvalidTags(entryTags: string[], requestTags: string[]): boolean {
-    // Check if any request tags indicate this entry should be invalidated
-    return requestTags.some(tag => tag.startsWith('invalidate:') && 
-      entryTags.includes(tag.replace('invalidate:', '')));
+    return requestTags.some(
+      tag =>
+        tag.startsWith('invalidate:') &&
+        entryTags.includes(tag.replace('invalidate:', ''))
+    );
   }
 
   private serializeData<T>(data: T): any {
-    if (this.compressionEnabled && this.estimateSize(data) > this.config.compressionThreshold) {
-      // In a real implementation, you might use a compression library
-      return { compressed: true, data: JSON.stringify(data) };
+    const json = JSON.stringify(data);
+    if (
+      this.compressionEnabled &&
+      json.length * 2 > this.config.compressionThreshold
+    ) {
+      try {
+        const compressed = pako.gzip(json);
+        return { compressed: true, data: compressed };
+      } catch (error) {
+        console.error('Compression failed:', error);
+        return data;
+      }
     }
     return data;
   }
 
   private deserializeData<T>(data: any): T {
     if (data && data.compressed) {
-      return JSON.parse(data.data);
+      try {
+        const decompressed = pako.ungzip(data.data, { to: 'string' });
+        return JSON.parse(decompressed);
+      } catch (error) {
+        console.error('Decompression failed:', error);
+        return data;
+      }
     }
     return data;
   }
 
   private estimateSize(data: any): number {
-    // Rough estimation of object size in bytes
+    if (data && data.compressed) {
+      return data.data.length;
+    }
     return JSON.stringify(data).length * 2; // UTF-16 encoding approximation
   }
 
-  private async ensureSpace(requiredSize: number, priority: 'low' | 'normal' | 'high'): Promise<void> {
+  private async ensureSpace(
+    requiredSize: number,
+    priority: 'low' | 'normal' | 'high'
+  ): Promise<void> {
     const availableSpace = this.config.maxSize - this.stats.currentSize;
-    
+
     if (availableSpace >= requiredSize) return;
 
-    // Calculate how much space we need to free
     const spaceToFree = requiredSize - availableSpace;
-    
-    // Use different strategies based on priority
-    if (priority === 'high') {
-      // Aggressive cleanup for high priority items
-      await this.freeSpace(spaceToFree * 1.5);
-    } else if (priority === 'normal') {
-      await this.freeSpace(spaceToFree * 1.2);
-    } else {
-      // For low priority, only free minimum required space
-      await this.freeSpace(spaceToFree);
-    }
+    const multiplier =
+      priority === 'high' ? 1.5 : priority === 'normal' ? 1.2 : 1.0;
+    await this.freeSpace(spaceToFree * multiplier);
   }
 
   private async freeSpace(targetSpace: number): Promise<void> {
     const entries = Array.from(this.cache.entries());
     const now = Date.now();
 
-    // Sort by LRU with quality consideration
     entries.sort(([, a], [, b]) => {
       const aScore = (now - a.lastAccessed) / a.quality;
       const bScore = (now - b.lastAccessed) / b.quality;
@@ -405,7 +486,7 @@ export class AICache {
     let freedSpace = 0;
     for (const [key, entry] of entries) {
       if (freedSpace >= targetSpace) break;
-      
+
       this.cache.delete(key);
       freedSpace += entry.size;
     }
@@ -415,12 +496,11 @@ export class AICache {
   }
 
   private schedulePersistence(): void {
-    // Debounced persistence to avoid too frequent writes
     setTimeout(async () => {
       if (this.persistenceQueue.size > 0) {
         await this.saveToStorage();
         this.persistenceQueue.clear();
       }
-    }, 5000); // 5 second delay
+    }, APP_CONFIG.DEBOUNCE_TIME_MS); // Use index.ts debounce time
   }
 }

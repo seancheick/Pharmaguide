@@ -6,8 +6,7 @@ import {
   DemographicFactors,
   IngredientAnalysisResult,
 } from './ingredientAnalyzer';
-import type { Product, StackItem } from '../../types';
-import type { HealthProfile } from '../../hooks/useHealthProfile';
+import type { Product, UserStack, UserProfile } from '../../types';
 
 export interface EnhancedSupplementAnalysis {
   // Overall Assessment
@@ -91,8 +90,8 @@ export class SupplementAnalyzer {
    */
   async analyzeSupplementComprehensive(
     product: Product,
-    healthProfile?: HealthProfile,
-    currentStack?: StackItem[]
+    healthProfile?: UserProfile,
+    currentStack?: UserStack[]
   ): Promise<EnhancedSupplementAnalysis> {
     // Convert health profile to demographic factors
     const demographics = this.convertHealthProfileToDemographics(healthProfile);
@@ -175,7 +174,7 @@ export class SupplementAnalyzer {
    */
   async performSafetyCheck(
     product: Product,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): Promise<{
     isSafe: boolean;
     riskLevel: 'NONE' | 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
@@ -228,7 +227,7 @@ export class SupplementAnalyzer {
    * Convert health profile to demographic factors for analysis
    */
   private convertHealthProfileToDemographics(
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): DemographicFactors | undefined {
     if (!healthProfile) return undefined;
 
@@ -318,7 +317,7 @@ export class SupplementAnalyzer {
   private performClinicalAssessment(
     analyses: IngredientAnalysisResult[],
     demographics?: DemographicFactors,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ) {
     const avgSafetyScore =
       analyses.reduce((sum, a) => sum + a.safetyScore, 0) / analyses.length;
@@ -348,7 +347,7 @@ export class SupplementAnalyzer {
   private generatePersonalizedRecommendations(
     analyses: IngredientAnalysisResult[],
     demographics?: DemographicFactors,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ) {
     const dosageAdjustments: string[] = [];
     const timingRecommendations: string[] = [];

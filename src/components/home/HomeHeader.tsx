@@ -1,5 +1,5 @@
 // src/components/home/HomeHeader.tsx
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -32,6 +32,13 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
   const slideAnim = useRef(new Animated.Value(-20)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const notificationScale = useRef(new Animated.Value(1)).current;
+
+  // Force re-render every minute for dynamic greeting
+  const [, setNow] = useState(Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     // Entry animation
@@ -91,16 +98,14 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
 
   const getGreeting = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
+    if (hour >= 5 && hour < 12) return 'Good morning';
+    if (hour >= 12 && hour < 18) return 'Good afternoon';
     return 'Good evening';
   };
 
   const getEmoji = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return '☀️';
-    if (hour < 17) return '🌤';
-    if (hour < 20) return '🌅';
+    if (hour >= 5 && hour < 18) return hour < 12 ? '☀️' : '🌤';
     return '🌙';
   };
 
@@ -127,7 +132,9 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
           <View style={styles.greetingRow}>
             <Text style={styles.greeting}>
               {getGreeting()}
-              {userName && <Text style={styles.userName}>, {userName}</Text>}
+              {userName ? (
+                <Text style={styles.userName}>, {userName}</Text>
+              ) : null}
             </Text>
             <Text style={styles.emoji}>{getEmoji()}</Text>
           </View>
@@ -209,6 +216,8 @@ export const HomeHeader: React.FC<HomeHeaderProps> = ({
     </Animated.View>
   );
 };
+
+HomeHeader.displayName = 'HomeHeader';
 
 const styles = StyleSheet.create({
   container: {

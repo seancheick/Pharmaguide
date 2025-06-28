@@ -1,7 +1,7 @@
 // src/components/stack/StackStatistics.tsx
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { OptimizedIcon } from '../common/OptimizedIcon';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { UserStack, StackInteractionResult } from '../../types';
 
@@ -61,7 +61,12 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
         {/* Total Items */}
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <MaterialIcons name="inventory" size={20} color={COLORS.primary} />
+            <OptimizedIcon
+              type="material"
+              name="inventory"
+              size={20}
+              color={COLORS.primary}
+            />
           </View>
           <Text style={styles.statNumber}>{totalItems}</Text>
           <Text style={styles.statLabel}>Total Items</Text>
@@ -70,7 +75,12 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
         {/* Supplements */}
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <Ionicons name="fitness" size={20} color={COLORS.secondary} />
+            <OptimizedIcon
+              type="ion"
+              name="fitness"
+              size={20}
+              color={COLORS.secondary}
+            />
           </View>
           <Text style={styles.statNumber}>{supplements}</Text>
           <Text style={styles.statLabel}>Supplements</Text>
@@ -79,7 +89,12 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
         {/* Medications */}
         <View style={styles.statCard}>
           <View style={styles.statIcon}>
-            <MaterialIcons name="medication" size={20} color={COLORS.accent} />
+            <OptimizedIcon
+              type="material"
+              name="medication"
+              size={20}
+              color={COLORS.accent}
+            />
           </View>
           <Text style={styles.statNumber}>{medications}</Text>
           <Text style={styles.statLabel}>Medications</Text>
@@ -93,7 +108,8 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
               { backgroundColor: `${safetyStatus.color}20` },
             ]}
           >
-            <MaterialIcons
+            <OptimizedIcon
+              type="material"
               name={analysis?.overallSafe ? 'check-circle' : 'warning'}
               size={20}
               color={safetyStatus.color}
@@ -110,14 +126,20 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
       {analysis && (interactions > 0 || nutrientWarnings > 0) && (
         <View style={styles.alertSummary}>
           <View style={styles.alertHeader}>
-            <MaterialIcons name="info" size={16} color={COLORS.textSecondary} />
+            <OptimizedIcon
+              type="material"
+              name="info"
+              size={16}
+              color={COLORS.textSecondary}
+            />
             <Text style={styles.alertTitle}>Alerts Summary</Text>
           </View>
 
           <View style={styles.alertStats}>
             {interactions > 0 && (
               <View style={styles.alertItem}>
-                <MaterialIcons
+                <OptimizedIcon
+                  type="material"
                   name="error-outline"
                   size={16}
                   color={getRiskColor(analysis.overallRiskLevel)}
@@ -130,7 +152,8 @@ export const StackStatistics: React.FC<StackStatisticsProps> = ({
 
             {nutrientWarnings > 0 && (
               <View style={styles.alertItem}>
-                <MaterialIcons
+                <OptimizedIcon
+                  type="material"
                   name="warning"
                   size={16}
                   color={COLORS.warning}

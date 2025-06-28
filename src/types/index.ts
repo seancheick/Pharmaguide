@@ -1,7 +1,16 @@
 // src/types/index.ts
+import type { UserProfile } from './healthProfile';
 
 // Navigation types
 export * from './navigation';
+
+// Health Profile types - Import with alias to avoid conflicts
+export * from './healthProfile';
+
+// Type aliases for backward compatibility
+export type StackItem = UserStack;
+// Use the comprehensive UserProfile from healthProfile.ts
+export type { UserProfile as HealthProfile } from './healthProfile';
 
 // User types
 export interface User {
@@ -14,18 +23,6 @@ export interface User {
   streaks?: UserStreaks;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface UserProfile {
-  firstName: string | null;
-  lastName: string | null;
-  age: number | null;
-  gender: string | null;
-  healthGoals: string[];
-  conditions: string[];
-  medications: string[];
-  allergies: string[];
-  genetics: any | null;
 }
 
 export interface UserPreferences {
@@ -149,10 +146,7 @@ export interface InteractionDetail {
   severity: RiskLevel;
   message: string;
   mechanism?: string;
-  evidenceSources?: Array<{
-    badge: string;
-    text: string;
-  }>;
+  evidenceSources?: { badge: string; text: string }[];
   recommendation: string;
 }
 
@@ -221,11 +215,7 @@ export interface UserStack {
   frequency: string;
   brand?: string;
   imageUrl?: string;
-  ingredients?: Array<{
-    name: string;
-    amount?: number;
-    unit?: string;
-  }>;
+  ingredients?: { name: string; amount?: number; unit?: string }[];
   active: boolean;
   created_at: string;
   updated_at: string;
@@ -247,16 +237,12 @@ export interface Allergy {
   name: string;
 }
 
-export interface GeneticProfile {
-  // Define structure based on your needs
-}
+export type GeneticProfile = object; // TODO: Replace with a more specific type if needed
 
-export interface NotificationSettings {
-  // Define structure based on your needs
-}
+export type NotificationSettings = object; // TODO: Replace with a more specific type if needed
 
 export type AuthError = {
   message: string;
   code: string;
-  originalError?: any; // NEW: Added optional originalError
+  originalError?: unknown; // NEW: Specify unknown instead of any
 };

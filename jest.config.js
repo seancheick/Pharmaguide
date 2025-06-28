@@ -1,7 +1,8 @@
 export default {
   preset: 'jest-expo',
   setupFilesAfterEnv: [
-    '<rootDir>/src/utils/testSetup.ts'
+    '<rootDir>/src/utils/testSetup.ts',
+    '<rootDir>/src/tests/setup/testHelpers.tsx'
   ],
   testMatch: [
     '**/__tests__/**/*.(ts|tsx|js)',
@@ -15,11 +16,39 @@ export default {
     '!src/**/*.spec.*',
     '!src/types/**',
     '!src/constants/**',
-    '!src/navigation/**',
-    '!src/config/environments/**'
+    '!src/config/environments/**',
+    '!src/tests/setup/**',
+    '!src/tests/mocks/**',
+    '!src/tests/fixtures/**'
   ],
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov', 'html'],
+  coverageReporters: ['text', 'lcov', 'html', 'json-summary'],
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70
+    },
+    './src/components/': {
+      branches: 80,
+      functions: 80,
+      lines: 80,
+      statements: 80
+    },
+    './src/hooks/': {
+      branches: 75,
+      functions: 75,
+      lines: 75,
+      statements: 75
+    },
+    './src/services/': {
+      branches: 85,
+      functions: 85,
+      lines: 85,
+      statements: 85
+    }
+  },
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@components/(.*)$': '<rootDir>/src/components/$1',

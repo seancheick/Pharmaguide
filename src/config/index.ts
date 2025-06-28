@@ -5,15 +5,16 @@ export { stagingConfig } from './environments/staging';
 export { productionConfig } from './environments/production';
 
 // Re-export commonly used configuration values for convenience
-export const {
-  supabaseUrl,
-  supabaseAnonKey,
-  environment,
-  appName,
-  appVersion,
-  enableAnalytics,
-  enableCrashReporting,
-  enablePerformanceMonitoring,
-  apiTimeout,
-  maxRetries,
-} = config;
+// Use lazy evaluation to avoid initialization issues
+import { config } from './environment';
+
+export const supabaseUrl = config.supabaseUrl;
+export const supabaseAnonKey = config.supabaseAnonKey;
+export const environment = config.environment;
+export const appName = config.appName;
+export const appVersion = config.appVersion;
+export const enableAnalytics = config.enableAnalytics;
+export const enableCrashReporting = config.enableCrashReporting;
+export const enablePerformanceMonitoring = config.enablePerformanceMonitoring;
+export const apiTimeout = config.apiTimeout;
+export const maxRetries = config.maxRetries;

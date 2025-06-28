@@ -1,0 +1,139 @@
+# flashlight/test-scenarios.yml
+# Flashlight performance testing scenarios
+
+app: com.pharmaguide.app
+
+scenarios:
+  # App Launch Performance
+  - name: "App Launch"
+    description: "Measure app startup time and initial render"
+    steps:
+      - launchApp
+      - waitForElement: "Welcome to PharmaGuide"
+    metrics:
+      - cpu
+      - memory
+      - fps
+      - startup_time
+
+  # Product Scanning Performance
+  - name: "Product Scanning"
+    description: "Measure barcode scanning and analysis performance"
+    steps:
+      - launchApp
+      - tapOn: "Scan Product"
+      - waitForElement: "Point camera at barcode"
+      - simulateBarcodeScan: "1234567890123"
+      - waitForElement: "Product Analysis"
+    metrics:
+      - cpu
+      - memory
+      - fps
+      - network_requests
+      - render_time
+
+  # Stack Management Performance
+  - name: "Stack Management"
+    description: "Measure stack operations performance"
+    steps:
+      - launchApp
+      - tapOn: "Stack"
+      - waitForElement: "Your Stack"
+      - scrollTo: "bottom"
+      - scrollTo: "top"
+      - tapOn: "Add Product"
+      - inputText: "Test Product"
+      - tapOn: "Save"
+    metrics:
+      - cpu
+      - memory
+      - fps
+      - scroll_performance
+
+  # Form Performance
+  - name: "Form Interaction"
+    description: "Measure form validation and persistence performance"
+    steps:
+      - launchApp
+      - tapOn: "Profile"
+      - tapOn: "Health Profile"
+      - inputText: "John Doe"
+      - tapOn: "Next"
+      - selectOption: "25-34"
+      - tapOn: "Next"
+      - selectMultiple: ["general_wellness", "immune_support"]
+      - tapOn: "Save"
+    metrics:
+      - cpu
+      - memory
+      - fps
+      - input_latency
+      - validation_time
+
+  # Navigation Performance
+  - name: "Navigation Flow"
+    description: "Measure navigation performance across screens"
+    steps:
+      - launchApp
+      - tapOn: "Scan"
+      - waitForElement: "Scan Product"
+      - tapOn: "Stack"
+      - waitForElement: "Your Stack"
+      - tapOn: "Profile"
+      - waitForElement: "Profile"
+      - tapOn: "Home"
+      - waitForElement: "Welcome to PharmaGuide"
+    metrics:
+      - cpu
+      - memory
+      - fps
+      - navigation_time
+
+  # Memory Stress Test
+  - name: "Memory Stress"
+    description: "Test memory usage under heavy load"
+    steps:
+      - launchApp
+      - repeat: 20
+        steps:
+          - tapOn: "Scan Product"
+          - simulateBarcodeScan: "random_barcode"
+          - waitForElement: "Product Analysis"
+          - tapOn: "Back"
+    metrics:
+      - memory
+      - memory_leaks
+      - gc_pressure
+
+  # Network Performance
+  - name: "Network Operations"
+    description: "Measure network request performance"
+    steps:
+      - launchApp
+      - tapOn: "Search"
+      - inputText: "Vitamin D3"
+      - tapOn: "Search"
+      - waitForElement: "Search Results"
+      - tapOn: "result_item_0"
+      - waitForElement: "Product Analysis"
+    metrics:
+      - network_requests
+      - request_latency
+      - data_usage
+      - cache_efficiency
+
+thresholds:
+  cpu_usage: 80%
+  memory_usage: 200MB
+  fps: 55
+  startup_time: 3000ms
+  render_time: 16ms
+  input_latency: 100ms
+  navigation_time: 300ms
+  request_latency: 2000ms
+
+reporting:
+  format: ["json", "html"]
+  output_dir: "./flashlight-reports"
+  include_screenshots: true
+  include_traces: true

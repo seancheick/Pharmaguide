@@ -23,11 +23,26 @@ export type RootStackParamList = {
 
   // Health Profile Screens
   HealthProfileSetup: undefined;
-  DemographicsScreen: undefined;
-  HealthGoalsScreen: undefined;
-  HealthConditionsScreen: undefined;
-  AllergiesScreen: undefined;
-  MedicationsScreen: undefined;
+  DemographicsScreen: {
+    fromSetup?: boolean;
+    initialValue?: any;
+  };
+  HealthGoalsScreen: {
+    fromSetup?: boolean;
+    initialValue?: any;
+  };
+  HealthConditionsScreen: {
+    fromSetup?: boolean;
+    initialValue?: any;
+  };
+  AllergiesScreen: {
+    fromSetup?: boolean;
+    initialValue?: any;
+  };
+  MedicationsScreen: {
+    fromSetup?: boolean;
+    initialValue?: any;
+  };
 
   // Profile Section Screens
   SettingsScreen: undefined;

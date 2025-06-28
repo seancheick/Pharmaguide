@@ -2,11 +2,11 @@
 // Finalized test script for HuggingFace API with your provided API key, and adds Groq test.
 
 // Your Hugging Face API key is embedded directly here.
-const HF_API_KEY = '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';
+const HF_API_KEY = 'API';
 
 // !!! IMPORTANT: ADD YOUR GROQ API KEY HERE FOR TESTING GROQ MODELS !!!
 // This is a placeholder, ensure you have a real Groq API key from console.groq.com
-const GROQ_API_KEY = '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'; // Replace with your actual Groq API key
+const GROQ_API_KEY = 'API'; // Replace with your actual Groq API key
 
 async function testConnectionAndModels() {
   console.log('🚀 Starting API Tests (HuggingFace & Groq)\n');

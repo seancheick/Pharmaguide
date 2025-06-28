@@ -2,54 +2,32 @@
 
 import { create } from 'zustand';
 import { safeStorage } from '../utils/safeStorage'; // Use safeStorage instead
-import { supabase } from '../services/supabase/client';
-import type { UserStack } from '../types';
+// import { supabase } from '../services/supabase/client';
+import { generateUUID } from '../utils/uuid';
+import {
+  transformDbToUserStack,
+  transformDbArrayToUserStack,
+  createStackInsertPayload,
+  createStackUpdatePayload,
+  validateStackItem,
+  sanitizeStackItem,
+} from '../utils/databaseTransforms';
+import type { UserStack, DatabaseUserStack } from '../types';
 import type { PostgrestError } from '@supabase/supabase-js';
 
 // Helper function to safely get user ID with the new RPC function
+// All user stack data is now local-only. No user creation or Supabase sync needed.
 const createUserIfNeeded = async (
   authId: string,
   email?: string | null
 ): Promise<string | null> => {
-  try {
-    const { data, error } = await supabase.rpc('create_user_with_profile', {
-      p_auth_id: authId,
-      p_email: email || null,
-      p_is_anonymous: !email,
-    });
-
-    if (error) {
-      console.error('Error creating user with profile:', error);
-      return null;
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error in createUserIfNeeded:', error);
-    return null;
-  }
+  return null;
 };
 
 // Helper function to test database connectivity
+// No remote DB connection needed for local-only stack
 const testDatabaseConnection = async (userId: string): Promise<boolean> => {
-  try {
-    // Test basic connectivity with a simple count query
-    const { data, error } = await supabase
-      .from('user_stack')
-      .select('id', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .limit(1);
-
-    if (error) {
-      console.warn('Database connectivity test failed:', error.message);
-      return false;
-    }
-
-    return true;
-  } catch (error) {
-    console.warn('Database connectivity test error:', error);
-    return false;
-  }
+  return true;
 };
 
 // Add a timeout wrapper for Supabase calls
@@ -98,58 +76,9 @@ export const useStackStore = create<StackStore>((set, get) => ({
   initialized: false,
   loading: false,
 
+  // No user ID needed for local-only stack
   _getUserId: async (): Promise<string | null> => {
-    try {
-      // First try to get from safeStorage for faster response
-      const storedUserId = await safeStorage.getItem('current_user_id');
-      if (storedUserId) {
-        return storedUserId;
-      }
-
-      // If not in storage, try to get from auth session with timeout
-      const {
-        data: { session },
-      } = await withTimeout(supabase.auth.getSession(), 3000);
-
-      if (!session?.user) {
-        return null;
-      }
-
-      // Try to get user ID from database
-      try {
-        const { data, error } = await withTimeout(
-          supabase
-            .from('users')
-            .select('id')
-            .eq('auth_id', session.user.id)
-            .single(),
-          3000
-        );
-
-        if (error || !data) {
-          console.warn('User not found in database, attempting to create');
-          const userId = await createUserIfNeeded(
-            session.user.id,
-            session.user.email
-          );
-          if (userId) {
-            // Store for future use
-            await safeStorage.setItem('current_user_id', userId);
-          }
-          return userId;
-        }
-
-        // Store for future use
-        await safeStorage.setItem('current_user_id', data.id);
-        return data.id;
-      } catch (dbError) {
-        console.error('Database error getting user ID:', dbError);
-        return null;
-      }
-    } catch (error) {
-      console.error('Error getting user ID for stack operations:', error);
-      return null;
-    }
+    return null;
   },
 
   loadStack: async () => {
@@ -166,96 +95,9 @@ export const useStackStore = create<StackStore>((set, get) => ({
         set({ stack: localStack });
       }
 
-      // Then try to get user ID with timeout protection
-      const userId = await get()._getUserId();
-      let dbStack: UserStack[] = [];
-      let serverError: PostgrestError | null = null;
-
-      if (userId) {
-        try {
-          // First test database connectivity
-          const isConnected = await testDatabaseConnection(userId);
-          if (!isConnected) {
-            console.warn(
-              'Database connectivity test failed, using local fallback'
-            );
-            serverError = {
-              message: 'Database connectivity test failed',
-            } as PostgrestError;
-          } else {
-            const { data, error } = await withTimeout(
-              supabase
-                .from('user_stack')
-                .select('*')
-                .eq('user_id', userId)
-                .eq('active', true)
-                .order('updated_at', { ascending: false }),
-              5000
-            );
-
-            if (error) {
-              serverError = error;
-              console.warn(
-                'Failed to load stack from DB, using local fallback:',
-                error.message || error.details || JSON.stringify(error)
-              );
-              console.warn('Full error object:', error);
-            } else {
-              // Transform database response to match UserStack interface
-              dbStack = (data || []).map((item: any) => ({
-                id: item.id,
-                user_id: item.user_id,
-                item_id: item.item_id,
-                name: item.name,
-                type: item.type,
-                dosage: item.dosage,
-                frequency: item.frequency,
-                brand: item.brand,
-                imageUrl: item.image_url, // Transform snake_case to camelCase
-                ingredients: item.ingredients,
-                active: item.active,
-                created_at: item.created_at,
-                updated_at: item.updated_at,
-              }));
-            }
-          }
-        } catch (timeoutError) {
-          console.warn('Database request timed out, using local fallback');
-          serverError = { message: 'Request timed out' } as PostgrestError;
-        }
-      } else {
-        console.warn('No valid user ID found, using local stack data only.');
-      }
-
-      // Merge database and local stacks if we got data from the server
-      let mergedStack: UserStack[] = localStack;
-
-      if (dbStack.length > 0 && !serverError) {
-        // Merge database and local stacks, preferring the most recently updated version
-        mergedStack = [...dbStack, ...localStack].reduce<UserStack[]>(
-          (acc, item) => {
-            const existing = acc.find((i: UserStack) => i.id === item.id);
-            if (
-              !existing ||
-              new Date(item.updated_at) > new Date(existing.updated_at)
-            ) {
-              return [...acc.filter((i: UserStack) => i.id !== item.id), item];
-            }
-            return acc;
-          },
-          [] as UserStack[]
-        );
-      }
-
-      set({ stack: mergedStack, initialized: true });
-
-      // Save the merged stack back to local storage
-      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(mergedStack));
-
-      // Attempt to sync local-only data to server after load if connection was restored
-      if (!serverError && userId) {
-        await get().syncWithServer();
-      }
+      // Only load from local storage; no remote stack
+      set({ stack: localStack, initialized: true });
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(localStack));
     } catch (error: any) {
       console.error('Error loading stack (outer catch):', error);
       set({ initialized: true });
@@ -278,18 +120,51 @@ export const useStackStore = create<StackStore>((set, get) => ({
   addToStack: async item => {
     set({ loading: true });
     const timestamp = new Date().toISOString();
-    const tempId = `temp_${Date.now()}`;
-    const newItem: UserStack = {
-      id: tempId,
-      user_id: 'pending_sync',
-      item_id: item.item_id || tempId,
+
+    // Generate proper UUIDs for both id and item_id
+    const generateUUID = () => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+        /[xy]/g,
+        function (c) {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        }
+      );
+    };
+
+    const tempId = generateUUID();
+    const itemId = generateUUID(); // Always generate a new UUID for item_id
+
+    // Sanitize and validate input
+    const sanitizedItem = sanitizeStackItem({
+      ...item,
       name: item.name || 'Unknown Product',
       type: item.type || 'supplement',
       dosage: item.dosage || 'As directed',
       frequency: item.frequency || 'Daily',
-      brand: item.brand,
-      imageUrl: item.imageUrl,
-      ingredients: item.ingredients,
+    });
+
+    // Validate required fields
+    const validationErrors = validateStackItem(sanitizedItem);
+    if (validationErrors.length > 0) {
+      throw {
+        message: `Validation failed: ${validationErrors.join(', ')}`,
+        code: 'validation/invalid-item',
+      } as StackStoreError;
+    }
+
+    const newItem: UserStack = {
+      id: tempId,
+      user_id: 'pending_sync',
+      item_id: itemId, // Use proper UUID instead of potentially invalid item.item_id
+      name: sanitizedItem.name!,
+      type: sanitizedItem.type!,
+      dosage: sanitizedItem.dosage,
+      frequency: sanitizedItem.frequency,
+      brand: sanitizedItem.brand,
+      imageUrl: sanitizedItem.imageUrl,
+      ingredients: sanitizedItem.ingredients || [],
       active: true,
       created_at: timestamp,
       updated_at: timestamp,
@@ -299,71 +174,10 @@ export const useStackStore = create<StackStore>((set, get) => ({
     set(state => ({ stack: [...state.stack, newItem] }));
 
     try {
-      const userId = await get()._getUserId();
-      if (!userId) {
-        throw {
-          message: 'Not authenticated. Item added locally only.',
-          code: 'auth/not-authenticated',
-        } as StackStoreError;
-      }
-
-      const itemDataForDb = {
-        user_id: userId,
-        name: newItem.name,
-        type: newItem.type,
-        dosage: newItem.dosage,
-        frequency: newItem.frequency,
-        item_id: newItem.item_id,
-        brand: newItem.brand,
-        image_url: newItem.imageUrl, // Transform camelCase to snake_case for DB
-        ingredients: newItem.ingredients,
-        active: true,
-        created_at: timestamp,
-        updated_at: timestamp,
-      };
-
-      const { data, error } = await supabase
-        .from('user_stack')
-        .insert(itemDataForDb)
-        .select()
-        .single();
-
-      if (error) {
-        throw {
-          message: error.message || 'Failed to add item to database.',
-          code: (error as PostgrestError).code || 'db/insert-failed',
-          originalError: error,
-        } as StackStoreError;
-      }
-
-      // Replace temporary item with actual server item (transform response)
-      const serverItem: UserStack = {
-        id: data.id,
-        user_id: data.user_id,
-        item_id: data.item_id,
-        name: data.name,
-        type: data.type,
-        dosage: data.dosage,
-        frequency: data.frequency,
-        brand: data.brand,
-        imageUrl: data.image_url, // Transform snake_case to camelCase
-        ingredients: data.ingredients,
-        active: data.active,
-        created_at: data.created_at,
-        updated_at: data.updated_at,
-      };
-
-      set(state => ({
-        stack: state.stack.map(sItem =>
-          sItem.id === tempId ? serverItem : sItem
-        ),
-      }));
-
-      // Update local storage
+      // Only add to local stack
       await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
     } catch (error: any) {
-      console.error('Error adding to stack (DB sync failed):', error);
-      // Mark as local-only if DB failed
+      console.error('Error adding to stack (local only):', error);
       set(state => ({
         stack: state.stack.map(sItem =>
           sItem.id === tempId
@@ -373,7 +187,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
       }));
       await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
       throw {
-        message: error.message || 'Failed to add item. Added locally only.',
+        message: error.message || 'Failed to add item locally.',
         code: error.code || 'stack/add-failed',
         originalError: error,
       } as StackStoreError;
@@ -392,36 +206,25 @@ export const useStackStore = create<StackStore>((set, get) => ({
     }));
     await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
 
-    try {
-      const { error } = await supabase
-        .from('user_stack')
-        .update({ active: false, updated_at: timestamp })
-        .eq('id', itemId);
-
-      if (error) {
-        throw {
-          message: error.message || 'Failed to remove item from database.',
-          code: (error as PostgrestError).code || 'db/update-failed',
-          originalError: error,
-        } as StackStoreError;
-      }
-    } catch (error: any) {
-      console.error('Error removing from stack (DB sync failed):', error);
-      // Revert optimistic update on failure
-      set({ stack: prevStack });
-      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
-      throw {
-        message: error.message || 'Failed to remove item. Please try again.',
-        code: error.code || 'stack/remove-failed',
-        originalError: error,
-      } as StackStoreError;
-    }
+    // Only update local stack
+    // No remote removal
   },
 
   updateStack: async (itemId: string, updates: Partial<UserStack>) => {
     const timestamp = new Date().toISOString();
+
+    // Sanitize and validate updates
+    const sanitizedUpdates = sanitizeStackItem(updates);
+    const validationErrors = validateStackItem(sanitizedUpdates);
+    if (validationErrors.length > 0) {
+      throw {
+        message: `Validation failed: ${validationErrors.join(', ')}`,
+        code: 'validation/invalid-update',
+      } as StackStoreError;
+    }
+
     const updateData = {
-      ...updates,
+      ...sanitizedUpdates,
       updated_at: timestamp,
     };
 
@@ -434,100 +237,12 @@ export const useStackStore = create<StackStore>((set, get) => ({
     }));
     await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
 
-    try {
-      const { error } = await supabase
-        .from('user_stack')
-        .update(updateData)
-        .eq('id', itemId);
-
-      if (error) {
-        throw {
-          message: error.message || 'Failed to update item in database.',
-          code: (error as PostgrestError).code || 'db/update-failed',
-          originalError: error,
-        } as StackStoreError;
-      }
-    } catch (error: any) {
-      console.error('Error updating stack item (DB sync failed):', error);
-      // Revert optimistic update on failure
-      set({ stack: prevStack });
-      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(prevStack));
-      throw {
-        message: error.message || 'Failed to update item. Please try again.',
-        code: error.code || 'stack/update-failed',
-        originalError: error,
-      } as StackStoreError;
-    }
+    // Only update local stack
+    // No remote update
   },
 
-  syncWithServer: async () => {
-    try {
-      const userId = await get()._getUserId();
-      if (!userId) {
-        console.warn('Cannot sync with server: No user ID available.');
-        return;
-      }
-
-      const localStack = get().stack;
-
-      // Identify items that are local-only (need insert)
-      const localOnlyItems = localStack.filter(
-        item => item.user_id === 'local' || item.user_id === 'pending_sync'
-      );
-
-      // Push local-only items to server
-      for (const item of localOnlyItems) {
-        const { id, user_id, imageUrl, ...itemData } = item;
-        const { data: insertedData, error } = await supabase
-          .from('user_stack')
-          .insert({
-            ...itemData,
-            user_id: userId,
-            image_url: imageUrl, // Transform camelCase to snake_case
-            created_at: item.created_at,
-            updated_at: new Date().toISOString(),
-          })
-          .select()
-          .single();
-
-        if (error) {
-          console.error(
-            `Error syncing local item ${item.name} to server:`,
-            error
-          );
-          continue;
-        } else if (insertedData) {
-          // Replace the local item with the server-generated one (transform response)
-          const serverItem: UserStack = {
-            id: insertedData.id,
-            user_id: insertedData.user_id,
-            item_id: insertedData.item_id,
-            name: insertedData.name,
-            type: insertedData.type,
-            dosage: insertedData.dosage,
-            frequency: insertedData.frequency,
-            brand: insertedData.brand,
-            imageUrl: insertedData.image_url, // Transform snake_case to camelCase
-            ingredients: insertedData.ingredients,
-            active: insertedData.active,
-            created_at: insertedData.created_at,
-            updated_at: insertedData.updated_at,
-          };
-
-          set(state => ({
-            stack: state.stack.map(sItem =>
-              sItem.id === item.id ? serverItem : sItem
-            ),
-          }));
-        }
-      }
-
-      // After pushing local-only items, reload for consistency
-      await get().loadStack();
-    } catch (error: any) {
-      console.error('Error syncing with server:', error);
-    }
-  },
+  // No-op: All stack data is local-only, no server sync
+  syncWithServer: async () => {},
 
   _handleAuthChange: async (event, session) => {
     if (
@@ -541,7 +256,5 @@ export const useStackStore = create<StackStore>((set, get) => ({
   },
 }));
 
-// Subscribe to auth changes
-supabase.auth.onAuthStateChange((event, session) => {
-  useStackStore.getState()._handleAuthChange(event, session);
-});
+// No auth sync needed for local-only stack
+// (If you want to clear stack on sign out, handle here)

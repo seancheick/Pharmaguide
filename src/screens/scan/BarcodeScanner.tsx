@@ -21,6 +21,11 @@ import {
 } from 'expo-camera';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { ManualBarcodeEntry } from '../../components/barcode';
+import { cameraPermissionService } from '../../services/permissions/cameraPermissionService';
+import {
+  useCameraLifecycle,
+  useCameraPerformanceMonitor,
+} from '../../hooks/useCameraLifecycle';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 interface BarcodeScannerProps {
@@ -54,11 +59,43 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   const successAnimation = useRef(new Animated.Value(0)).current;
   const successScale = useRef(new Animated.Value(0)).current;
 
+  // Smart camera lifecycle management
+  const {
+    isActive: isCameraActive,
+    isSuspended: isCameraSuspended,
+    suspendReason,
+    activateCamera,
+    suspendCamera,
+    getMetrics,
+  } = useCameraLifecycle({
+    autoSuspendDelay: 30000, // 30 seconds of inactivity
+    enableAppStateHandling: true,
+    enableTabFocusHandling: true,
+    enableInactivitySuspend: true,
+    logPerformance: true,
+  });
+
+  // Camera performance monitoring
+  const performanceMetrics = useCameraPerformanceMonitor();
+
   useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
+    const initializeCamera = async () => {
+      if (!permission?.granted) {
+        await cameraPermissionService.requestCameraPermission({
+          context: 'barcode',
+          showHIPAACompliance: true,
+          onGranted: () => {
+            console.log('📷 Camera permission granted for barcode scanning');
+          },
+          onDenied: () => {
+            console.log('📷 Camera permission denied for barcode scanning');
+          },
+        });
+      }
+    };
+
+    initializeCamera();
+  }, [permission]);
 
   useEffect(() => {
     // Animated scanning line
@@ -89,7 +126,7 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   }, [scanning, scanLineAnimation]);
 
   const handleBarCodeScanned = ({ data }: BarcodeScanningResult) => {
-    if (scanned) return;
+    if (scanned || !isCameraActive) return;
 
     console.log('📱 Barcode scanned:', data);
 
@@ -98,6 +135,9 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
 
     setScanned(true);
     setScanning(false);
+
+    // Suspend camera after successful scan to save battery
+    suspendCamera('scan_complete');
 
     // Validate barcode format
     if (data && data.length >= 8) {
@@ -112,6 +152,8 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           onPress: () => {
             setScanned(false);
             setScanning(true);
+            // Reactivate camera for retry
+            activateCamera();
           },
         },
       ]);
@@ -170,10 +212,19 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
           <Text style={styles.permissionMessage}>
             PharmaGuide needs camera access to scan product barcodes for
             supplement analysis.
+            {'\n\n'}🔒 HIPAA Compliance: Your camera data is processed locally
+            and never transmitted to our servers. All health information remains
+            encrypted on your device.
           </Text>
           <TouchableOpacity
             style={styles.permissionButton}
-            onPress={requestPermission}
+            onPress={async () => {
+              await requestPermission(); // Update local permission state
+              cameraPermissionService.requestCameraPermission({
+                context: 'barcode',
+                showHIPAACompliance: true,
+              });
+            }}
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
@@ -202,15 +253,50 @@ export const BarcodeScanner: React.FC<BarcodeScannerProps> = ({
   return (
     <SafeAreaView style={styles.safeAreaContainer}>
       <View style={styles.cameraContainer}>
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          flash={flashEnabled ? 'on' : 'off'}
-          barcodeScannerSettings={{
-            barcodeTypes: CONSUMER_BARCODE_TYPES,
-          }}
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        />
+        {/* Only render camera when active to save resources */}
+        {isCameraActive && (
+          <CameraView
+            style={styles.camera}
+            facing="back"
+            flash={flashEnabled ? 'on' : 'off'}
+            barcodeScannerSettings={{
+              barcodeTypes: CONSUMER_BARCODE_TYPES,
+            }}
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+          />
+        )}
+
+        {/* Camera suspended overlay */}
+        {isCameraSuspended && (
+          <View style={styles.suspendedOverlay}>
+            <View style={styles.suspendedContent}>
+              <Ionicons
+                name="camera-outline"
+                size={48}
+                color={COLORS.textSecondary}
+              />
+              <Text style={styles.suspendedTitle}>Camera Paused</Text>
+              <Text style={styles.suspendedMessage}>
+                {suspendReason === 'tab_blur' &&
+                  'Camera paused when switching tabs'}
+                {suspendReason === 'app_background' &&
+                  'Camera paused when app is in background'}
+                {suspendReason === 'inactivity' &&
+                  'Camera paused due to inactivity'}
+                {suspendReason === 'scan_complete' &&
+                  'Scan completed successfully'}
+                {!suspendReason && 'Camera is temporarily paused'}
+              </Text>
+              <TouchableOpacity
+                style={styles.resumeButton}
+                onPress={activateCamera}
+              >
+                <Ionicons name="camera" size={20} color={COLORS.background} />
+                <Text style={styles.resumeButtonText}>Resume Camera</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Header */}
         <View style={styles.header}>
@@ -526,5 +612,45 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.sm,
     fontWeight: TYPOGRAPHY.weights.medium,
     marginLeft: SPACING.xs,
+  },
+  // Camera suspended overlay styles
+  suspendedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.background,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  suspendedContent: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  suspendedTitle: {
+    fontSize: TYPOGRAPHY.sizes.xl,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.textPrimary,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+  },
+  suspendedMessage: {
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: SPACING.xl,
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    gap: SPACING.sm,
+  },
+  resumeButtonText: {
+    color: COLORS.background,
+    fontSize: TYPOGRAPHY.sizes.base,
+    fontWeight: TYPOGRAPHY.weights.semibold,
   },
 });

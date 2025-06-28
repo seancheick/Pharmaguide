@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 import { useStackStore } from '../stores/stackStore';
 import { gamificationService } from '../services/gamification/gamificationService';
 import type { Product, ProductAnalysis } from '../types';
@@ -26,6 +27,7 @@ export const useProductAnalysis = ({
   const [savedToStack, setSavedToStack] = useState(false);
   const [loading, setLoading] = useState(false);
   const { addToStack } = useStackStore();
+  const navigation = useNavigation();
 
   // Save to recent scans on mount
   useEffect(() => {
@@ -40,68 +42,71 @@ export const useProductAnalysis = ({
     setLoading(!analysis);
   }, [analysis]);
 
-  const determineEvidenceLevel = useCallback((
-    anal: ProductAnalysis
-  ): 'A' | 'B' | 'C' | 'D' => {
-    if (!anal.stackInteraction || !anal.stackInteraction.interactions) {
+  const determineEvidenceLevel = useCallback(
+    (anal: ProductAnalysis): 'A' | 'B' | 'C' | 'D' => {
+      if (!anal.stackInteraction || !anal.stackInteraction.interactions) {
+        return 'D';
+      }
+
+      if (
+        anal.stackInteraction.interactions.some(i =>
+          i.evidenceSources?.some(s => s.text.includes('Clinical'))
+        )
+      ) {
+        return 'A';
+      }
+      if (
+        anal.stackInteraction.interactions.some(i =>
+          i.evidenceSources?.some(s => s.text.includes('Case'))
+        )
+      ) {
+        return 'B';
+      }
+      if (anal.stackInteraction.interactions.length > 0) {
+        return 'C';
+      }
       return 'D';
-    }
+    },
+    []
+  );
 
-    if (
-      anal.stackInteraction.interactions.some((i) =>
-        i.evidenceSources?.some((s) => s.text.includes('Clinical'))
-      )
-    ) {
-      return 'A';
-    }
-    if (
-      anal.stackInteraction.interactions.some((i) =>
-        i.evidenceSources?.some((s) => s.text.includes('Case'))
-      )
-    ) {
-      return 'B';
-    }
-    if (anal.stackInteraction.interactions.length > 0) {
-      return 'C';
-    }
-    return 'D';
-  }, []);
+  const saveToRecentScans = useCallback(
+    async (prod: Product, anal: ProductAnalysis) => {
+      try {
+        // Use the shared storage key for recent scans
+        const { STORAGE_KEYS } = await import('../constants/storage');
+        const existingScans = await AsyncStorage.getItem(
+          STORAGE_KEYS.RECENT_SCANS
+        );
+        const scans = existingScans ? JSON.parse(existingScans) : [];
 
-  const saveToRecentScans = useCallback(async (
-    prod: Product, 
-    anal: ProductAnalysis
-  ) => {
-    try {
-      const existingScans = await AsyncStorage.getItem(
-        'pharmaguide_recent_scans'
-      );
-      const scans = existingScans ? JSON.parse(existingScans) : [];
+        const evidenceLevel = determineEvidenceLevel(anal);
 
-      const evidenceLevel = determineEvidenceLevel(anal);
+        const newScan = {
+          id: Date.now().toString(),
+          name: prod.name,
+          brand: prod.brand,
+          imageUrl: prod.imageUrl,
+          score: anal.overallScore,
+          hasInteraction: anal.stackInteraction
+            ? anal.stackInteraction.overallRiskLevel !== 'NONE'
+            : false,
+          evidence: evidenceLevel,
+          scannedAt: new Date().toISOString(),
+        };
 
-      const newScan = {
-        id: Date.now().toString(),
-        name: prod.name,
-        brand: prod.brand,
-        imageUrl: prod.imageUrl,
-        score: anal.overallScore,
-        hasInteraction: anal.stackInteraction
-          ? anal.stackInteraction.overallRiskLevel !== 'NONE'
-          : false,
-        evidence: evidenceLevel,
-        scannedAt: new Date().toISOString(),
-      };
-
-      const updatedScans = [newScan, ...scans].slice(0, 50);
-      await AsyncStorage.setItem(
-        'pharmaguide_recent_scans',
-        JSON.stringify(updatedScans)
-      );
-      console.log('Scan saved to recent scans:', prod.name);
-    } catch (error) {
-      console.error('Error saving recent scan:', error);
-    }
-  }, [determineEvidenceLevel]);
+        const updatedScans = [newScan, ...scans].slice(0, 50);
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.RECENT_SCANS,
+          JSON.stringify(updatedScans)
+        );
+        console.log('Scan saved to recent scans:', prod.name);
+      } catch (error) {
+        console.error('Error saving recent scan:', error);
+      }
+    },
+    [determineEvidenceLevel]
+  );
 
   const updateGamification = useCallback(async () => {
     try {
@@ -133,17 +138,30 @@ export const useProductAnalysis = ({
       return;
     }
 
+    // Generate a proper UUID for the item_id instead of using barcode
+    const generateUUID = () => {
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
+        /[xy]/g,
+        function (c) {
+          const r = (Math.random() * 16) | 0;
+          const v = c === 'x' ? r : (r & 0x3) | 0x8;
+          return v.toString(16);
+        }
+      );
+    };
+
     const itemToAdd = {
-      item_id: product.id,
+      item_id: generateUUID(), // Use proper UUID instead of product.id (which might be a barcode)
       name: product.name,
       type: 'supplement' as 'medication' | 'supplement',
       dosage: product.dosage || 'As directed',
       frequency: 'Daily',
-      ingredients: product.ingredients.map((ing) => ({
-        name: ing.name,
-        amount: ing.amount,
-        unit: ing.unit,
-      })),
+      ingredients:
+        product.ingredients?.map(ing => ({
+          name: ing.name,
+          amount: ing.amount,
+          unit: ing.unit,
+        })) || [],
       brand: product.brand,
       imageUrl: product.imageUrl,
     };
@@ -170,12 +188,25 @@ export const useProductAnalysis = ({
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Start Chat',
-          onPress: () =>
-            console.log('Navigate to AI chat with product context'),
+          onPress: () => {
+            console.log('Navigate to AI chat with product context');
+            // Navigate to AI tab with product context
+            (navigation as any).navigate('MainTabs', {
+              screen: 'AI',
+              params: {
+                productContext: {
+                  name: product.name,
+                  brand: product.brand,
+                  analysis: analysis,
+                  initialMessage: `I'd like to discuss ${product.name}${product.brand ? ` by ${product.brand}` : ''}. Can you help me understand more about this supplement?`,
+                },
+              },
+            });
+          },
         },
       ]
     );
-  }, [product]);
+  }, [product, analysis, navigation]);
 
   return {
     savedToStack,

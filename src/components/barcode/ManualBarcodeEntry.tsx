@@ -12,8 +12,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { OptimizedIcon } from '../common/OptimizedIcon';
 
 interface ManualBarcodeEntryProps {
   onBarcodeEntered: (barcode: string) => void;
@@ -44,10 +44,10 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
   const validateBarcode = (code: string): boolean => {
     // Remove any spaces or dashes
     const cleanCode = code.replace(/[\s-]/g, '');
-    
+
     // Check if it's a valid length for common barcode formats
     const validLengths = [8, 12, 13, 14]; // EAN-8, UPC-A, EAN-13, ITF-14
-    
+
     if (!validLengths.includes(cleanCode.length)) {
       return false;
     }
@@ -69,11 +69,11 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
     try {
       const digits = code.split('').map(Number);
       let sum = 0;
-      
+
       for (let i = 0; i < digits.length - 1; i++) {
         sum += digits[i] * (i % 2 === 0 ? 1 : 3);
       }
-      
+
       const checkDigit = (10 - (sum % 10)) % 10;
       return checkDigit === digits[digits.length - 1];
     } catch {
@@ -83,7 +83,7 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
 
   const handleSubmit = () => {
     const cleanBarcode = barcode.replace(/[\s-]/g, '');
-    
+
     if (!cleanBarcode) {
       Alert.alert('Invalid Input', 'Please enter a barcode number.');
       return;
@@ -103,12 +103,12 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
         'The barcode format appears to be invalid. Do you want to search anyway?',
         [
           { text: 'Cancel', style: 'cancel' },
-          { 
-            text: 'Search Anyway', 
+          {
+            text: 'Search Anyway',
             onPress: () => {
               setIsValidating(false);
               onBarcodeEntered(cleanBarcode);
-            }
+            },
           },
         ]
       );
@@ -126,16 +126,16 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
   const formatBarcodeInput = (text: string) => {
     // Remove non-digits and limit length
     const cleaned = text.replace(/\D/g, '').slice(0, 14);
-    
+
     // Add formatting for readability (spaces every 4 digits)
     const formatted = cleaned.replace(/(\d{4})(?=\d)/g, '$1 ');
-    
+
     setBarcode(formatted);
   };
 
   const getHelpText = () => {
     const length = barcode.replace(/\D/g, '').length;
-    
+
     if (length === 0) {
       return 'Enter the barcode number found on the product package';
     } else if (length < 8) {
@@ -149,7 +149,7 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
 
   const getHelpColor = () => {
     const length = barcode.replace(/\D/g, '').length;
-    
+
     if (length === 0) return COLORS.textSecondary;
     if (length < 8) return COLORS.warning;
     if (length >= 8 && length <= 14) return COLORS.success;
@@ -158,14 +158,20 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+            <OptimizedIcon
+              type="ion"
+              name="close"
+              size={24}
+              color={COLORS.textPrimary}
+              accessibilityLabel="Close"
+            />
           </TouchableOpacity>
           <Text style={styles.title}>{title}</Text>
           <View style={styles.placeholder} />
@@ -174,21 +180,29 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
         {/* Content */}
         <View style={styles.content}>
           <View style={styles.iconContainer}>
-            <MaterialIcons name="keyboard" size={48} color={COLORS.primary} />
+            <OptimizedIcon
+              type="material"
+              name="keyboard"
+              size={48}
+              color={COLORS.primary}
+              accessibilityLabel="Keyboard"
+            />
           </View>
 
           <Text style={styles.subtitle}>
-            Can't scan the barcode? Enter it manually below.
+            Cannot scan the barcode? Enter it manually below.
           </Text>
 
           {/* Input Section */}
           <View style={styles.inputContainer}>
             <View style={styles.inputWrapper}>
-              <Ionicons 
-                name="barcode-outline" 
-                size={20} 
-                color={COLORS.textSecondary} 
+              <OptimizedIcon
+                type="ion"
+                name="barcode-outline"
+                size={20}
+                color={COLORS.textSecondary}
                 style={styles.inputIcon}
+                accessibilityLabel="Barcode"
               />
               <TextInput
                 ref={inputRef}
@@ -209,7 +223,13 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
                   style={styles.clearButton}
                   onPress={() => setBarcode('')}
                 >
-                  <Ionicons name="close-circle" size={20} color={COLORS.textSecondary} />
+                  <OptimizedIcon
+                    type="ion"
+                    name="close-circle"
+                    size={20}
+                    color={COLORS.textSecondary}
+                    accessibilityLabel="Clear input"
+                  />
                 </TouchableOpacity>
               )}
             </View>
@@ -241,17 +261,15 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
 
         {/* Bottom Actions */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={styles.cancelButton}
-            onPress={onClose}
-          >
+          <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
             <Text style={styles.cancelButtonText}>Cancel</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[
               styles.submitButton,
-              (barcode.replace(/\D/g, '').length < 8 || isValidating) && styles.submitButtonDisabled,
+              (barcode.replace(/\D/g, '').length < 8 || isValidating) &&
+                styles.submitButtonDisabled,
             ]}
             onPress={handleSubmit}
             disabled={barcode.replace(/\D/g, '').length < 8 || isValidating}
@@ -260,7 +278,12 @@ export const ManualBarcodeEntry: React.FC<ManualBarcodeEntryProps> = ({
               <Text style={styles.submitButtonText}>Validating...</Text>
             ) : (
               <>
-                <Ionicons name="search" size={20} color={COLORS.white} />
+                <OptimizedIcon
+                  type="ion"
+                  name="search"
+                  size={20}
+                  color={COLORS.white}
+                />
                 <Text style={styles.submitButtonText}>Submit</Text>
               </>
             )}

@@ -10,7 +10,7 @@ import { AICache } from './AICache';
 import { aiService } from './aiService';
 import { costTracker } from '../analytics/costTracker';
 import { networkService } from '../network/networkService';
-import type { Product, StackItem, HealthProfile } from '../../types';
+import type { Product, UserStack, UserProfile } from '../../types';
 
 export interface ThreeTierResult {
   result: any;
@@ -80,8 +80,8 @@ export class ThreeTierRouter {
    */
   async analyzeProduct(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     options?: {
       userId?: string;
       forceRefresh?: boolean;
@@ -168,8 +168,8 @@ export class ThreeTierRouter {
    */
   private async tryTier1(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile
+    stack: UserStack[],
+    _healthProfile?: UserProfile
   ): Promise<RuleBasedResult> {
     try {
       this.stats.tier1Usage++;
@@ -234,8 +234,8 @@ export class ThreeTierRouter {
    */
   private async tryTier3(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     options?: any
   ): Promise<any> {
     try {
@@ -374,8 +374,8 @@ export class ThreeTierRouter {
    */
   private generateCacheKey(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile
+    stack: UserStack[],
+    healthProfile?: UserProfile
   ): string {
     const productKey = `${product.name}_${product.brand || 'unknown'}`;
     const stackKey = stack

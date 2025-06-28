@@ -4,19 +4,39 @@
     "slug": "pharmaguide",
     "version": "1.0.0",
     "orientation": "portrait",
+    "main": "./index.ts",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
+    "description": "PharmaGuide: AI-powered supplement and medication interaction checker with offline-capable analysis, barcode scanning, and HIPAA-compliant privacy protection.",
+    "keywords": [
+      "supplement interactions",
+      "medication safety",
+      "health app",
+      "barcode scanner",
+      "HIPAA compliant",
+      "drug interactions",
+      "supplement checker",
+      "pharmacy app",
+      "health safety",
+      "AI analysis",
+      "offline health",
+      "supplement safety"
+    ],
+    "category": "health-fitness",
+    "privacy": "public",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.pharmaguide.app"
+      "bundleIdentifier": "com.pharmaguide.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "PharmaGuide uses your camera to scan product barcodes and supplement labels for safety analysis. All data is processed locally and encrypted for HIPAA compliance.",
+        "NSHealthShareUsageDescription": "PharmaGuide can integrate with HealthKit to provide personalized supplement recommendations based on your health data. All information remains private and encrypted on your device."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +47,9 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
-      ]
+      ],
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.pharmaguide.app",
+      "googleServicesFile": "./google-services.json"
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -36,7 +58,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow PharmaGuide to access your camera for barcode scanning."
+          "cameraPermission": "PharmaGuide uses your camera to scan product barcodes and supplement labels for safety analysis. All data is processed locally and encrypted for HIPAA compliance."
         }
       ],
       "expo-sqlite"

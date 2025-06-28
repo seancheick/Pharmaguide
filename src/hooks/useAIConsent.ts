@@ -104,11 +104,18 @@ export const useAIConsent = () => {
       return false;
     }
 
+    // First check the current state to avoid unnecessary API calls
+    if (state.hasConsent) {
+      return true; // Can proceed with AI analysis
+    }
+
     try {
-      // Check current consent status
+      // Only check storage if we don't have consent in state
       const hasConsent = await localHealthProfileService.hasAIConsent(user.id);
 
       if (hasConsent) {
+        // Update state to reflect consent
+        setState(prev => ({ ...prev, hasConsent: true }));
         return true; // Can proceed with AI analysis
       } else {
         // Show consent modal
@@ -124,14 +131,9 @@ export const useAIConsent = () => {
       }));
       return false;
     }
-  }, [user?.id]);
+  }, [user?.id, state.hasConsent]);
 
-  /**
-   * Show consent modal manually
-   */
-  const showConsentModal = useCallback(() => {
-    setState(prev => ({ ...prev, showConsentModal: true }));
-  }, []);
+  // Note: showConsentModal function removed as it's not used
 
   /**
    * Hide consent modal

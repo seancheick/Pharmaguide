@@ -1,0 +1,120 @@
+# maestro/flows/product-scanning.yaml
+# Maestro UI testing flows for product scanning
+
+appId: com.pharmaguide.app
+name: Product Scanning Flow Tests
+tags:
+  - scanning
+  - core-functionality
+
+---
+
+# Test 1: Barcode Scanning Flow
+- launchApp
+- tapOn: "Scan Product"
+- assertVisible: "Point camera at barcode"
+- # Simulate barcode scan
+- runScript: |
+    mobile.simulateBarcodeScan("1234567890123")
+- assertVisible: "Product Analysis"
+- assertVisible: "Safety Score"
+- takeScreenshot: "product-analysis"
+
+---
+
+# Test 2: Manual Product Search
+- launchApp
+- tapOn: "Search"
+- inputText: "Vitamin D3"
+- tapOn: "Search"
+- assertVisible: "Search Results"
+- tapOn:
+    text: "Vitamin D3"
+    index: 0
+- assertVisible: "Product Analysis"
+- takeScreenshot: "manual-search-result"
+
+---
+
+# Test 3: Add to Stack Flow
+- launchApp
+- tapOn: "Scan Product"
+- runScript: |
+    mobile.simulateBarcodeScan("1234567890123")
+- assertVisible: "Product Analysis"
+- tapOn: "Add to Stack"
+- inputText: "1000mg"
+- tapOn: "Frequency"
+- tapOn: "Daily"
+- tapOn: "Time of Day"
+- tapOn: "Morning"
+- inputText: "Take with food"
+- tapOn: "Add to Stack"
+- assertVisible: "Added to your stack"
+- takeScreenshot: "added-to-stack"
+
+---
+
+# Test 4: Interaction Alerts
+- launchApp
+- tapOn: "Scan Product"
+- runScript: |
+    mobile.simulateBarcodeScan("9999999999999") # Product with interactions
+- assertVisible: "Product Analysis"
+- assertVisible: "Potential Interactions Found"
+- tapOn: "View Interactions"
+- assertVisible: "Interaction Details"
+- takeScreenshot: "interaction-alert"
+
+---
+
+# Test 5: Camera Permission Flow
+- launchApp
+- tapOn: "Scan Product"
+- # Handle permission dialog
+- tapOn: "Allow"
+- assertVisible: "Point camera at barcode"
+- takeScreenshot: "camera-permission-granted"
+
+---
+
+# Test 6: Search Suggestions
+- launchApp
+- tapOn: "Search"
+- inputText: "Vit"
+- assertVisible: "Vitamin D3"
+- assertVisible: "Vitamin C"
+- tapOn: "Vitamin D3"
+- assertVisible:
+    text: "Vitamin D3"
+    containsDescendants:
+      - text: "Search"
+- takeScreenshot: "search-suggestions"
+
+---
+
+# Test 7: Product Not Found
+- launchApp
+- tapOn: "Search"
+- inputText: "NonExistentProduct12345"
+- tapOn: "Search"
+- assertVisible: "No products found"
+- assertVisible: "Suggest a Product"
+- takeScreenshot: "product-not-found"
+
+---
+
+# Test 8: Offline Scanning
+- runScript: |
+    mobile.setNetworkCondition("offline")
+- launchApp
+- tapOn: "Scan Product"
+- runScript: |
+    mobile.simulateBarcodeScan("1234567890123")
+- assertVisible: "Network error"
+- assertVisible: "Retry"
+- runScript: |
+    mobile.setNetworkCondition("online")
+- tapOn: "Retry"
+- assertVisible: "Product Analysis"
+- takeScreenshot: "offline-retry-success"

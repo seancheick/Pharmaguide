@@ -1,6 +1,6 @@
 // src/screens/profile/HealthGoalsScreen.tsx
 // 🚀 WORLD-CLASS: Health Goals Selection Screen
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,19 +11,25 @@ import {
   Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { HealthGoalsScreenProps } from '../../types/navigation';
+import { storageAdapter } from '../../services/storage/storageAdapter';
+import { OptimizedIcon } from '../../components/common/OptimizedIcon';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
+import type {
+  HealthGoals,
+  HealthGoal as HealthGoalType,
+} from '../../types/healthProfile';
 
-interface HealthGoal {
+interface HealthGoalOption {
   id: string;
   title: string;
   description: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  icon: string; // Use string for compatibility with OptimizedIcon
   category: 'fitness' | 'wellness' | 'nutrition' | 'mental';
 }
 
-const HEALTH_GOALS: HealthGoal[] = [
+const HEALTH_GOALS: HealthGoalOption[] = [
   {
     id: 'muscle_building',
     title: 'Build Muscle',
@@ -112,14 +118,61 @@ const HEALTH_GOALS: HealthGoal[] = [
 
 export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
   navigation,
+  route,
 }) => {
-  const [selectedGoals, setSelectedGoals] = useState<string[]>([]);
+  // Accept initialValue from navigation params for progress recovery
+  const initialValue = route?.params?.initialValue as string[] | HealthGoals | undefined;
+  const [selectedGoals, setSelectedGoals] = useState<string[]>(() => {
+    if (Array.isArray(initialValue)) return initialValue;
+    if (initialValue && typeof initialValue === 'object' && (initialValue as HealthGoals).primary) {
+      // Convert HealthGoals interface to array
+      const g = initialValue as HealthGoals;
+      return [g.primary, g.secondary, g.tertiary].filter(Boolean) as string[];
+    }
+    return [];
+  });
+  const [isLoading, setIsLoading] = useState(false);
   const maxGoals = 3;
+  const { updateProfile } = useHealthProfile();
 
-  // 🔄 Mark step as complete in HealthProfileSetupScreen
+  //  Load existing data when component mounts (if not provided by initialValue)
+  useEffect(() => {
+    if (selectedGoals.length > 0) return; // Already set from initialValue
+    const loadExistingData = async () => {
+      try {
+        // Load from setup data (temporary storage during setup flow)
+        const savedSetupData = await AsyncStorage.getItem(
+          'health_profile_setup_data'
+        );
+        if (savedSetupData) {
+          const setupData = JSON.parse(savedSetupData);
+          if (setupData.goals) {
+            // Handle both array format (from setupData) and HealthGoals interface format
+            if (Array.isArray(setupData.goals)) {
+              setSelectedGoals(setupData.goals);
+            } else if (setupData.goals.primary) {
+              // Convert HealthGoals interface back to array for UI
+              const goals = [
+                setupData.goals.primary,
+                setupData.goals.secondary,
+                setupData.goals.tertiary,
+              ].filter(Boolean);
+              setSelectedGoals(goals);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing health goals:', error);
+      }
+    };
+
+    loadExistingData();
+  }, [selectedGoals.length]);
+
+  // �🔄 Mark step as complete in HealthProfileSetupScreen
   const markStepComplete = async (stepId: string) => {
     try {
-      const savedProgress = await AsyncStorage.getItem(
+      const savedProgress = await storageAdapter.getItem(
         'health_profile_setup_progress'
       );
       if (savedProgress) {
@@ -135,7 +188,7 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
         );
         const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
 
-        await AsyncStorage.setItem(
+        await storageAdapter.setItem(
           'health_profile_setup_progress',
           JSON.stringify({
             currentStep: nextStep,
@@ -173,22 +226,55 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
       return;
     }
 
+    setIsLoading(true);
     try {
-      // TODO: Save to profile service
-      console.log('Saving health goals:', selectedGoals);
+      console.log('💾 Saving health goals:', selectedGoals);
 
-      // Mark health goals step as complete and advance to next step
+      // 1. Save to setupData (temporary storage during setup flow)
+      const savedSetupData = await AsyncStorage.getItem(
+        'health_profile_setup_data'
+      );
+      const setupData = savedSetupData ? JSON.parse(savedSetupData) : {};
+      setupData.goals = selectedGoals; // Store as array for UI compatibility
+      await AsyncStorage.setItem(
+        'health_profile_setup_data',
+        JSON.stringify(setupData)
+      );
+
+      // 2. Transform to HealthGoals interface and save to health profile
+      const goalsData: HealthGoals = {
+        primary: selectedGoals[0] as HealthGoalType,
+        secondary: selectedGoals[1] as HealthGoalType,
+        tertiary: selectedGoals[2] as HealthGoalType,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const result = await updateProfile('goals', goalsData);
+      if (result.error) {
+        throw new Error(
+          typeof result.error === 'string'
+            ? result.error
+            : 'Failed to save health goals'
+        );
+      }
+
+      console.log('✅ Successfully saved health goals');
+
+      // 3. Mark health goals step as complete and advance to next step
       await markStepComplete('health_goals');
 
       // No success popup - user continues to next step seamlessly
       navigation.goBack();
     } catch (error) {
-      console.error('Error saving health goals:', error);
+      console.error('❌ Error saving health goals:', error);
       Alert.alert('Error', 'Failed to save health goals. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const renderGoalCard = (goal: HealthGoal) => {
+  const renderGoalCard = (goal: HealthGoalOption) => {
     const isSelected = selectedGoals.includes(goal.id);
 
     return (
@@ -205,15 +291,23 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
               isSelected && styles.selectedIconContainer,
             ]}
           >
-            <Ionicons
+            <OptimizedIcon
+              type="ion"
               name={goal.icon}
               size={24}
               color={isSelected ? COLORS.white : COLORS.primary}
+              accessibilityLabel={`${goal.title} icon`}
             />
           </View>
           {isSelected && (
             <View style={styles.checkmark}>
-              <Ionicons name="checkmark" size={16} color={COLORS.white} />
+              <OptimizedIcon
+                type="ion"
+                name="checkmark"
+                size={16}
+                color={COLORS.white}
+                accessibilityLabel="Selected"
+              />
             </View>
           )}
         </View>
@@ -242,7 +336,13 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+          <OptimizedIcon
+            type="ion"
+            name="arrow-back"
+            size={24}
+            color={COLORS.textPrimary}
+            accessibilityLabel="Back"
+          />
         </TouchableOpacity>
         <Text style={styles.title}>Health Goals</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -253,7 +353,13 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <Ionicons name="flag" size={32} color={COLORS.primary} />
+          <OptimizedIcon
+            type="ion"
+            name="flag"
+            size={32}
+            color={COLORS.primary}
+            accessibilityLabel="Flag"
+          />
           <Text style={styles.instructionsTitle}>Choose Your Goals</Text>
           <Text style={styles.instructionsText}>
             Select up to {maxGoals} health goals to get personalized supplement
@@ -273,9 +379,23 @@ export const HealthGoalsScreen: React.FC<HealthGoalsScreenProps> = ({
       {/* Save Button */}
       {selectedGoals.length > 0 && (
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save Goals</Text>
-            <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+          <TouchableOpacity
+            style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={isLoading}
+          >
+            <Text style={styles.saveButtonText}>
+              {isLoading ? 'Saving...' : 'Save Goals'}
+            </Text>
+            {!isLoading && (
+              <OptimizedIcon
+                type="ion"
+                name="arrow-forward"
+                size={20}
+                color={COLORS.white}
+                accessibilityLabel="Save"
+              />
+            )}
           </TouchableOpacity>
         </View>
       )}
@@ -408,6 +528,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: 12,
     gap: SPACING.sm,
+  },
+  saveButtonDisabled: {
+    backgroundColor: COLORS.gray400,
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.sizes.lg,

@@ -1,18 +1,10 @@
 // src/services/ai/huggingface.ts
 import { API_ENDPOINTS, AI_MODELS } from '../../constants';
 import { analysisRateLimiter, secureFetch } from '../../utils/rateLimiting';
-import { sanitizeApiResponse } from '../../utils/sanitization';
-import { handleApiError } from '../../utils/errorHandling';
-import type {
-  Product,
-  ProductAnalysis,
-  AnalysisPoint,
-  IngredientForm,
-} from '../../types';
+import { requestDeduplicator } from '../performance/requestDeduplicator';
+import type { Product, ProductAnalysis, AnalysisPoint } from '../../types';
 
-interface HuggingFaceTextResponse {
-  generated_text: string;
-}
+// Note: HuggingFaceTextResponse interface removed as it's no longer used
 
 interface HuggingFaceClassificationResponse {
   sequence: string;
@@ -20,15 +12,7 @@ interface HuggingFaceClassificationResponse {
   scores: number[];
 }
 
-// Define the expected structure for HuggingFace Embedding API response
-interface HuggingFaceEmbeddingResponse {
-  // Sentence-transformers models usually return an array of arrays (embeddings)
-  // The API response for a single input text is a single array of numbers.
-  // For multiple inputs, it's an array of arrays.
-  // The raw JSON might just be the array of numbers directly if inputs is a single string.
-  // We'll treat it as number[][] for consistency, assuming `inputs` will always be an array of strings.
-  [key: number]: number[]; // This matches an array of arrays.
-}
+// Note: HuggingFace Embedding API returns number[] for single input or number[][] for multiple inputs
 
 interface HuggingFaceError {
   error: string;
@@ -273,56 +257,62 @@ class HuggingFaceService {
     product: Product,
     useAI: boolean = true
   ): Promise<Partial<ProductAnalysis>> {
-    try {
-      // Generate cache key
-      const cacheKey = this.generateCacheKey(product);
+    // Use request deduplicator to prevent duplicate analysis requests
+    const deduplicationKey = `product_analysis_${this.generateCacheKey(product)}`;
 
-      // Check cache first
-      const cached = this.getCachedAnalysis(cacheKey);
-      if (cached) {
-        console.log('📦 Using cached analysis for:', product.name);
-        return cached;
-      }
+    return requestDeduplicator.deduplicate(deduplicationKey, async () => {
+      try {
+        // Generate cache key
+        const cacheKey = this.generateCacheKey(product);
 
-      // Always start with rule-based analysis
-      const baseAnalysis = this.generateAdvancedRuleBasedAnalysis(product);
+        // Check cache first
+        const cached = this.getCachedAnalysis(cacheKey);
+        if (cached) {
+          console.log('📦 Using cached analysis for:', product.name);
+          return cached;
+        }
 
-      // Only attempt AI enhancement if useAI is true and we have at least one API key
-      if (useAI && (this.apiKey || this.useGroq)) {
-        try {
-          // Try to enhance with AI
-          const enhancedAnalysis = await this.tryAIEnhancement(
-            product,
-            baseAnalysis
+        // Always start with rule-based analysis
+        const baseAnalysis = this.generateAdvancedRuleBasedAnalysis(product);
+
+        // Only attempt AI enhancement if useAI is true and we have at least one API key
+        if (useAI && (this.apiKey || this.useGroq)) {
+          try {
+            // Try to enhance with AI
+            const enhancedAnalysis = await this.tryAIEnhancement(
+              product,
+              baseAnalysis
+            );
+            // Return enhanced analysis, and then cache it
+            const finalAnalysis = { ...baseAnalysis, ...enhancedAnalysis };
+            this.cacheAnalysis(cacheKey, finalAnalysis);
+            return finalAnalysis;
+          } catch (aiError) {
+            console.error(
+              'AI enhancement failed for product analysis, using rule-based analysis:',
+              aiError
+            );
+            this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base if AI failed
+            return baseAnalysis;
+          }
+        } else {
+          // Skip AI enhancement
+          console.log(
+            '⚠️ Using rule-based analysis only (AI disabled or no API key)'
           );
-          // Return enhanced analysis, and then cache it
-          const finalAnalysis = { ...baseAnalysis, ...enhancedAnalysis };
-          this.cacheAnalysis(cacheKey, finalAnalysis);
-          return finalAnalysis;
-        } catch (aiError) {
-          console.error(
-            'AI enhancement failed for product analysis, using rule-based analysis:',
-            aiError
-          );
-          this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base if AI failed
+          this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base analysis
           return baseAnalysis;
         }
-      } else {
-        // Skip AI enhancement
-        console.log(
-          '⚠️ Using rule-based analysis only (AI disabled or no API key)'
-        );
-        this.cacheAnalysis(cacheKey, baseAnalysis); // Cache base analysis
-        return baseAnalysis;
+      } catch (error) {
+        console.error('Product analysis error (outer catch):', error);
+        // Fallback to rule-based analysis even if outer try-catch fails
+        const fallbackAnalysis =
+          this.generateAdvancedRuleBasedAnalysis(product);
+        const fallbackCacheKey = this.generateCacheKey(product);
+        this.cacheAnalysis(fallbackCacheKey, fallbackAnalysis); // Cache fallback
+        return fallbackAnalysis;
       }
-    } catch (error) {
-      console.error('Product analysis error (outer catch):', error);
-      // Fallback to rule-based analysis even if outer try-catch fails
-      const fallbackAnalysis = this.generateAdvancedRuleBasedAnalysis(product);
-      const fallbackCacheKey = this.generateCacheKey(product);
-      this.cacheAnalysis(fallbackCacheKey, fallbackAnalysis); // Cache fallback
-      return fallbackAnalysis;
-    }
+    });
   }
 
   /**
@@ -388,7 +378,7 @@ class HuggingFaceService {
     analysis: Partial<ProductAnalysis>
   ): Promise<string> {
     if (!this.useGroq) {
-      return this.generateDefaultReasoning(product, analysis); // Fallback if Groq not enabled
+      return this.generateDetailedReasoning(product, analysis); // Fallback if Groq not enabled
     }
 
     const prompt = this.createEnhancedReasoningPrompt(product, analysis);
@@ -398,7 +388,7 @@ class HuggingFaceService {
       return this.cleanAIResponse(response);
     } catch (error) {
       console.error('Groq reasoning generation failed:', error);
-      return this.generateDefaultReasoning(product, analysis); // Fallback on Groq error
+      return this.generateDetailedReasoning(product, analysis); // Fallback on Groq error
     }
   }
 
@@ -739,7 +729,6 @@ class HuggingFaceService {
     let purity = product.thirdPartyTested ? 80 : 45;
     let value = 55 + variation;
 
-    const productName = product.name.toLowerCase();
     const brandName = product.brand.toLowerCase();
 
     // Premium brand bonuses
@@ -937,7 +926,6 @@ class HuggingFaceService {
    */
   private identifyStrengths(product: Product): AnalysisPoint[] {
     const strengths: AnalysisPoint[] = [];
-    const productName = product.name.toLowerCase();
     const brandName = product.brand.toLowerCase();
 
     if (product.thirdPartyTested) {
@@ -998,7 +986,6 @@ class HuggingFaceService {
    */
   private identifyWeaknesses(product: Product): AnalysisPoint[] {
     const weaknesses: AnalysisPoint[] = [];
-    const productName = product.name.toLowerCase();
     const brandName = product.brand.toLowerCase();
 
     if (!product.thirdPartyTested) {
@@ -1279,17 +1266,7 @@ Focus on practical, evidence-based insights that help consumers make informed de
   /**
    * Validation methods for API responses.
    */
-  // Note: isValidTextResponse is no longer directly used for Groq, but kept for HF compatibility
-  private isValidTextResponse(
-    response: any
-  ): response is HuggingFaceTextResponse[] {
-    if (Array.isArray(response)) {
-      return (
-        response.length > 0 && typeof response[0]?.generated_text === 'string'
-      );
-    }
-    return response && typeof response.generated_text === 'string';
-  }
+  // Note: Text response validation removed as it's no longer used
 
   private isValidClassificationResponse(
     response: any

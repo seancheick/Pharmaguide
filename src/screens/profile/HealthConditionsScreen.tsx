@@ -1,6 +1,6 @@
 // src/screens/profile/HealthConditionsScreen.tsx
 // 🚀 WORLD-CLASS: Health Conditions Selection Screen
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,11 +12,17 @@ import {
   TextInput,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import { HealthConditionsScreenProps } from '../../types/navigation';
+import { storageAdapter } from '../../services/storage/storageAdapter';
+import { OptimizedIcon } from '../../components/common/OptimizedIcon';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
+import type {
+  HealthConditions,
+  HealthCondition as HealthConditionType,
+} from '../../types/healthProfile';
 
-interface HealthCondition {
+interface HealthConditionOption {
   id: string;
   name: string;
   category:
@@ -26,11 +32,11 @@ interface HealthCondition {
     | 'mental'
     | 'autoimmune'
     | 'other';
-  icon: keyof typeof MaterialIcons.glyphMap;
+  icon: string; // Use string for compatibility with OptimizedIcon
   description?: string;
 }
 
-const COMMON_CONDITIONS: HealthCondition[] = [
+const COMMON_CONDITIONS: HealthConditionOption[] = [
   {
     id: 'hypertension',
     name: 'High Blood Pressure',
@@ -119,15 +125,65 @@ const COMMON_CONDITIONS: HealthCondition[] = [
 
 export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
   navigation,
+  route,
 }) => {
-  const [selectedConditions, setSelectedConditions] = useState<string[]>([]);
+  // Accept initialValue from navigation params for progress recovery
+  const initialValue = route?.params?.initialValue as
+    | {
+        selectedConditions?: string[];
+        customConditions?: string[];
+        allConditions?: string[];
+      }
+    | undefined;
+  const [selectedConditions, setSelectedConditions] = useState<string[]>(
+    initialValue?.selectedConditions || []
+  );
   const [customCondition, setCustomCondition] = useState('');
-  const [customConditions, setCustomConditions] = useState<string[]>([]);
+  const [customConditions, setCustomConditions] = useState<string[]>(
+    initialValue?.customConditions || []
+  );
+  const [isLoading, setIsLoading] = useState(false);
+  const { updateProfile } = useHealthProfile();
+
+  // 💾 Load existing data when component mounts (if not provided by initialValue)
+  useEffect(() => {
+    if (
+      initialValue &&
+      (initialValue.selectedConditions?.length ||
+        initialValue.customConditions?.length)
+    )
+      return;
+    const loadExistingData = async () => {
+      try {
+        // Load from setup data (temporary storage during setup flow)
+        const savedSetupData = await AsyncStorage.getItem(
+          'health_profile_setup_data'
+        );
+        if (savedSetupData) {
+          const setupData = JSON.parse(savedSetupData);
+          if (setupData.conditions) {
+            const { selectedConditions: saved, customConditions: savedCustom } =
+              setupData.conditions;
+            if (Array.isArray(saved)) {
+              setSelectedConditions(saved);
+            }
+            if (Array.isArray(savedCustom)) {
+              setCustomConditions(savedCustom);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading existing health conditions:', error);
+      }
+    };
+
+    loadExistingData();
+  }, [initialValue]);
 
   // 🔄 Mark step as complete in HealthProfileSetupScreen
   const markStepComplete = async (stepId: string) => {
     try {
-      const savedProgress = await AsyncStorage.getItem(
+      const savedProgress = await storageAdapter.getItem(
         'health_profile_setup_progress'
       );
       if (savedProgress) {
@@ -143,7 +199,7 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
         );
         const nextStep = Math.min(completedStepIndex + 1, steps.length - 1);
 
-        await AsyncStorage.setItem(
+        await storageAdapter.setItem(
           'health_profile_setup_progress',
           JSON.stringify({
             currentStep: nextStep,
@@ -183,25 +239,73 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
   const handleSave = async () => {
     const allConditions = [...selectedConditions, ...customConditions];
 
+    setIsLoading(true);
     try {
-      // TODO: Save to profile service
-      console.log('Saving health conditions:', allConditions);
+      console.log('💾 Saving health conditions:', {
+        selectedConditions,
+        customConditions,
+      });
 
-      // Mark health conditions step as complete and advance to next step
+      // 1. Save to setupData (temporary storage during setup flow)
+      const savedSetupData = await AsyncStorage.getItem(
+        'health_profile_setup_data'
+      );
+      const setupData = savedSetupData ? JSON.parse(savedSetupData) : {};
+      setupData.conditions = {
+        selectedConditions,
+        customConditions,
+        allConditions,
+      };
+      await AsyncStorage.setItem(
+        'health_profile_setup_data',
+        JSON.stringify(setupData)
+      );
+
+      // 2. Transform to HealthConditions interface and save to health profile
+      const conditionsData: HealthConditions = {
+        conditions: allConditions.map(condition => ({
+          id: typeof condition === 'string' ? condition : condition,
+          name: typeof condition === 'string' ? condition : condition,
+          category: 'other' as const,
+          severity: 'moderate' as const,
+          diagnosedDate: new Date().toISOString(),
+          isActive: true,
+          notes: customConditions.includes(condition)
+            ? 'Custom condition'
+            : undefined,
+        })),
+        consentGiven: true,
+        lastUpdated: new Date().toISOString(),
+      };
+
+      const result = await updateProfile('conditions', conditionsData);
+      if (result.error) {
+        throw new Error(
+          typeof result.error === 'string'
+            ? result.error
+            : 'Failed to save health conditions'
+        );
+      }
+
+      console.log('✅ Successfully saved health conditions');
+
+      // 3. Mark health conditions step as complete and advance to next step
       await markStepComplete('health_conditions');
 
       // No success popup - user continues to next step seamlessly
       navigation.goBack();
     } catch (error) {
-      console.error('Error saving health conditions:', error);
+      console.error('❌ Error saving health conditions:', error);
       Alert.alert(
         'Error',
         'Failed to save health conditions. Please try again.'
       );
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const renderConditionCard = (condition: HealthCondition) => {
+  const renderConditionCard = (condition: HealthConditionOption) => {
     const isSelected = selectedConditions.includes(condition.id);
 
     return (
@@ -221,14 +325,16 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
               isSelected && styles.selectedIconContainer,
             ]}
           >
-            <MaterialIcons
+            <OptimizedIcon
+              type="material"
               name={condition.icon}
               size={20}
               color={isSelected ? COLORS.white : COLORS.primary}
             />
           </View>
           {isSelected && (
-            <Ionicons
+            <OptimizedIcon
+              type="ion"
               name="checkmark-circle"
               size={20}
               color={COLORS.success}
@@ -265,7 +371,12 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
           onPress={() => navigation.goBack()}
           style={styles.backButton}
         >
-          <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
+          <OptimizedIcon
+            type="ion"
+            name="arrow-back"
+            size={24}
+            color={COLORS.textPrimary}
+          />
         </TouchableOpacity>
         <Text style={styles.title}>Health Conditions</Text>
         <TouchableOpacity onPress={() => navigation.goBack()}>
@@ -276,7 +387,8 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Instructions */}
         <View style={styles.instructions}>
-          <MaterialIcons
+          <OptimizedIcon
+            type="material"
             name="health-and-safety"
             size={32}
             color={COLORS.primary}
@@ -287,7 +399,8 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
             supplement recommendations and identify potential interactions.
           </Text>
           <View style={styles.privacyNote}>
-            <Ionicons
+            <OptimizedIcon
+              type="ion"
               name="shield-checkmark"
               size={16}
               color={COLORS.success}
@@ -323,7 +436,12 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
               onPress={handleAddCustomCondition}
               disabled={!customCondition.trim()}
             >
-              <Ionicons name="add" size={20} color={COLORS.white} />
+              <OptimizedIcon
+                name="add"
+                size={20}
+                color={COLORS.white}
+                type="material"
+              />
             </TouchableOpacity>
           </View>
 
@@ -335,7 +453,12 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
                 onPress={() => handleRemoveCustomCondition(condition)}
                 style={styles.removeButton}
               >
-                <Ionicons name="close" size={16} color={COLORS.error} />
+                <OptimizedIcon
+                  name="close"
+                  size={16}
+                  color={COLORS.error}
+                  type="ion"
+                />
               </TouchableOpacity>
             </View>
           ))}
@@ -344,9 +467,22 @@ export const HealthConditionsScreen: React.FC<HealthConditionsScreenProps> = ({
 
       {/* Save Button */}
       <View style={styles.footer}>
-        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-          <Text style={styles.saveButtonText}>Save Conditions</Text>
-          <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
+        <TouchableOpacity
+          style={[styles.saveButton, isLoading && styles.saveButtonDisabled]}
+          onPress={handleSave}
+          disabled={isLoading}
+        >
+          <Text style={styles.saveButtonText}>
+            {isLoading ? 'Saving...' : 'Save Conditions'}
+          </Text>
+          {!isLoading && (
+            <OptimizedIcon
+              name="arrow-forward"
+              size={20}
+              color={COLORS.white}
+              type="ion"
+            />
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -529,6 +665,10 @@ const styles = StyleSheet.create({
     paddingVertical: SPACING.md,
     borderRadius: 12,
     gap: SPACING.sm,
+  },
+  saveButtonDisabled: {
+    backgroundColor: COLORS.gray400,
+    opacity: 0.6,
   },
   saveButtonText: {
     fontSize: TYPOGRAPHY.sizes.lg,

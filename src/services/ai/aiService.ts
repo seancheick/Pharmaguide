@@ -1,22 +1,23 @@
 // src/services/ai/aiService.ts
 import { supabase } from '../supabase/client';
-import type { Product, StackItem, ProductAnalysis } from '../../types';
-import type { HealthProfile } from '../../hooks/useHealthProfile';
+import type { Product, UserStack, UserProfile } from '../../types';
+import type { CitationSource } from '../../components/compliance';
+import { FDA_COMPLIANCE } from '../../components/compliance';
 import {
   SupplementAnalyzer,
   EnhancedSupplementAnalysis,
 } from '../analysis/supplementAnalyzer';
-import { AIModelManager } from './AIModelManager';
-import { AICache } from './AICache';
 import { analysisRateLimiter } from '../../utils/rateLimiting';
 import { localHealthProfileService } from '../health/localHealthProfileService';
+import { AIModelManager } from './AIModelManager';
+import { AICache } from './AICache';
 import { threeTierRouter, ThreeTierResult } from './threeTierRouter';
 
 interface AIAnalysisResult {
   overallScore?: number;
   categoryScores?: Record<string, number>;
-  strengths?: Array<{ point: string; evidence: string }>;
-  weaknesses?: Array<{ point: string; evidence: string }>;
+  strengths?: { point: string; evidence: string }[];
+  weaknesses?: { point: string; evidence: string }[];
   recommendations?: {
     goodFor: string[];
     avoidIf: string[];
@@ -24,11 +25,20 @@ interface AIAnalysisResult {
   stackInteraction?: any;
   personalizedRecommendations?: string[];
   confidenceScore?: number;
+  confidenceLevel?: number;
   evidenceLevel?: 'A' | 'B' | 'C' | 'D';
+  evidenceGrade?: 'A' | 'B' | 'C' | 'D';
   aiReasoning?: string;
   error?: string;
   fallbackUsed?: boolean;
   timestamp?: string;
+  // FDA Compliance fields
+  fdaCompliance?: {
+    disclaimer: string;
+    sources: CitationSource[];
+    educationalOnly: boolean;
+    requiresProviderConsultation: boolean;
+  };
 }
 
 interface SanitizedHealthProfile {
@@ -70,8 +80,8 @@ export class AIService {
    */
   async analyzeProductEnhanced(
     product: Product,
-    healthProfile?: HealthProfile,
-    stack?: StackItem[]
+    healthProfile?: UserProfile,
+    stack?: UserStack[]
   ): Promise<EnhancedSupplementAnalysis> {
     try {
       // Use the enhanced supplement analyzer for comprehensive analysis
@@ -99,7 +109,7 @@ export class AIService {
    */
   async performQuickSafetyCheck(
     product: Product,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): Promise<{
     isSafe: boolean;
     riskLevel: 'NONE' | 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
@@ -131,7 +141,7 @@ export class AIService {
    */
   async analyzeProduct(
     product: Product,
-    stack: StackItem[],
+    stack: UserStack[],
     analysisType: 'groq' | 'huggingface' = 'groq'
   ): Promise<AIAnalysisResult> {
     try {
@@ -161,15 +171,14 @@ export class AIService {
    */
   async analyzeProductWithThreeTier(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     options?: {
       priority?: 'speed' | 'quality' | 'cost';
       forceRefresh?: boolean;
       userId?: string;
     }
   ): Promise<ThreeTierResult> {
-    const startTime = Date.now();
     const userId = options?.userId;
 
     try {
@@ -205,7 +214,16 @@ export class AIService {
         `🚀 Three-tier analysis completed: ${result.tier} (${result.responseTime}ms, saved $${result.costSavings.toFixed(4)})`
       );
 
-      return result;
+      // Add FDA compliance information to the analysis result
+      const complianceResult = this.addFDACompliance(
+        result.result,
+        'supplement'
+      );
+
+      return {
+        ...result,
+        result: complianceResult,
+      };
     } catch (error) {
       console.error('❌ Three-tier analysis failed:', error);
       throw error;
@@ -219,8 +237,8 @@ export class AIService {
    */
   async analyzeProductWithEnhancedReasoning(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     options?: {
       priority?: 'speed' | 'quality' | 'cost' | 'reliability';
       maxLatency?: number;
@@ -327,8 +345,8 @@ export class AIService {
    */
   private async performEnhancedAnalysis(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     priority: 'speed' | 'quality' | 'cost' | 'reliability' = 'quality',
     maxLatency?: number
   ): Promise<AIAnalysisResult> {
@@ -403,8 +421,8 @@ export class AIService {
    */
   async analyzeProductWithHealthProfile(
     product: Product,
-    stack: StackItem[],
-    healthProfile: HealthProfile,
+    stack: UserStack[],
+    healthProfile: UserProfile,
     analysisType: 'groq' | 'huggingface' = 'groq'
   ): Promise<AIAnalysisResult> {
     try {
@@ -433,8 +451,8 @@ export class AIService {
    */
   async getInteractionInsights(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile
+    stack: UserStack[],
+    healthProfile?: UserProfile
   ): Promise<{
     interactions: any[];
     timingRecommendations: any[];
@@ -500,14 +518,59 @@ export class AIService {
         timestamp: new Date().toISOString(),
       };
     } catch (error) {
+      console.error('AI connectivity test failed:', error);
+
+      // Try to test individual services directly as fallback
+      const fallbackResults = await this.testIndividualServices();
+
       return {
-        groq: false,
-        huggingface: false,
-        overall: false,
+        groq: fallbackResults.groq,
+        huggingface: fallbackResults.huggingface,
+        overall: fallbackResults.groq || fallbackResults.huggingface,
         timestamp: new Date().toISOString(),
         errors: [error instanceof Error ? error.message : 'Unknown error'],
+        fallbackTested: true,
       };
     }
+  }
+
+  /**
+   * Test individual AI services directly as fallback
+   */
+  private async testIndividualServices(): Promise<{ groq: boolean; huggingface: boolean }> {
+    const results = { groq: false, huggingface: false };
+
+    // Test Groq directly if available
+    try {
+      const groqResponse = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: {
+          'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
+        },
+      });
+      results.groq = groqResponse.ok;
+    } catch (error) {
+      console.warn('Direct Groq test failed:', error);
+    }
+
+    // Test HuggingFace directly if available
+    try {
+      const hfResponse = await fetch('https://api-inference.huggingface.co/models/facebook/bart-large-mnli', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.HUGGINGFACE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: 'Health check test',
+          parameters: { candidate_labels: ['test'] },
+        }),
+      });
+      results.huggingface = hfResponse.ok;
+    } catch (error) {
+      console.warn('Direct HuggingFace test failed:', error);
+    }
+
+    return results;
   }
 
   /**
@@ -534,7 +597,7 @@ export class AIService {
    * Sanitize stack item data before sending to AI APIs
    * Removes personal information while keeping relevant supplement data
    */
-  private sanitizeStackItem(item: StackItem) {
+  private sanitizeStackItem(item: UserStack) {
     return {
       id: item.id,
       name: item.name,
@@ -554,9 +617,7 @@ export class AIService {
    * Sanitize health profile data for AI analysis
    * Only sends general categories, not specific personal details
    */
-  private sanitizeHealthProfile(
-    profile: HealthProfile
-  ): SanitizedHealthProfile {
+  private sanitizeHealthProfile(profile: UserProfile): SanitizedHealthProfile {
     const sanitized: SanitizedHealthProfile = {};
 
     // Demographics - only general categories
@@ -567,25 +628,28 @@ export class AIService {
     }
 
     // Health conditions - only general condition categories
-    if (profile.conditions?.conditions) {
-      sanitized.conditions = profile.conditions.conditions.filter(
-        condition => typeof condition === 'string' && condition.length > 0
-      );
+    if (profile.healthConditions?.conditions) {
+      sanitized.conditions = profile.healthConditions.conditions
+        .map(condition => condition.name)
+        .filter(name => typeof name === 'string' && name.length > 0);
     }
 
     // Allergies - only substance categories, not specific details
-    if (profile.allergies?.substances) {
-      sanitized.allergies = profile.allergies.substances.filter(
-        allergy => typeof allergy === 'string' && allergy.length > 0
-      );
+    if (profile.allergiesAndSensitivities?.allergies) {
+      sanitized.allergies = profile.allergiesAndSensitivities.allergies
+        .map(allergy => allergy.name)
+        .filter(name => typeof name === 'string' && name.length > 0);
     }
 
     // Health goals - general categories only
-    if (profile.goals) {
+    if (profile.healthGoals) {
       const goals = [];
-      if (profile.goals.primary) goals.push(profile.goals.primary);
-      if (profile.goals.secondary) goals.push(...profile.goals.secondary);
-      sanitized.goals = goals;
+      if (profile.healthGoals.primary) goals.push(profile.healthGoals.primary);
+      if (profile.healthGoals.secondary)
+        goals.push(profile.healthGoals.secondary);
+      if (profile.healthGoals.tertiary)
+        goals.push(profile.healthGoals.tertiary);
+      sanitized.goals = goals.filter(Boolean);
     }
 
     return sanitized;
@@ -659,7 +723,7 @@ export class AIService {
     }
 
     const validated: Record<string, number> = {};
-    for (const [key, value] of Object.entries(defaultScores)) {
+    for (const [key] of Object.entries(defaultScores)) {
       validated[key] = this.validateScore(scores[key]);
     }
 
@@ -671,7 +735,7 @@ export class AIService {
    */
   private validateStrengthsWeaknesses(
     items: any
-  ): Array<{ point: string; evidence: string }> {
+  ): { point: string; evidence: string }[] {
     if (!Array.isArray(items)) {
       return [];
     }
@@ -703,11 +767,64 @@ export class AIService {
 
     return {
       goodFor: Array.isArray(recs.goodFor)
-        ? recs.goodFor.filter(item => typeof item === 'string').slice(0, 5)
+        ? recs.goodFor
+            .filter((item: any) => typeof item === 'string')
+            .slice(0, 5)
         : [],
       avoidIf: Array.isArray(recs.avoidIf)
-        ? recs.avoidIf.filter(item => typeof item === 'string').slice(0, 5)
+        ? recs.avoidIf
+            .filter((item: any) => typeof item === 'string')
+            .slice(0, 5)
         : [],
+    };
+  }
+
+  /**
+   * Add FDA compliance information to analysis results
+   */
+  private addFDACompliance(
+    analysisResult: AIAnalysisResult,
+    analysisType: 'supplement' | 'interaction' | 'recommendation' = 'supplement'
+  ): AIAnalysisResult {
+    const sources: CitationSource[] = [
+      {
+        id: 'fda_dietary_supplements',
+        title: 'FDA Dietary Supplement Regulations',
+        source: 'FDA',
+        url: 'https://www.fda.gov/food/dietary-supplements',
+        year: 2024,
+        evidenceLevel: 'A',
+        description:
+          'Official FDA guidance on dietary supplement regulation and safety',
+      },
+      {
+        id: 'nih_supplement_database',
+        title: 'NIH Office of Dietary Supplements',
+        source: 'NIH',
+        url: 'https://ods.od.nih.gov/',
+        year: 2024,
+        evidenceLevel: 'A',
+        description:
+          'Comprehensive database of supplement research and safety information',
+      },
+    ];
+
+    const disclaimer =
+      analysisType === 'interaction'
+        ? `${FDA_COMPLIANCE.DISCLAIMERS.EDUCATIONAL_ONLY} This interaction analysis is based on available research and may not identify all potential interactions. ${FDA_COMPLIANCE.DISCLAIMERS.CONSULT_PROVIDER}`
+        : `${FDA_COMPLIANCE.DISCLAIMERS.EDUCATIONAL_ONLY} ${FDA_COMPLIANCE.DISCLAIMERS.NOT_MEDICAL_ADVICE} ${FDA_COMPLIANCE.DISCLAIMERS.CONSULT_PROVIDER}`;
+
+    return {
+      ...analysisResult,
+      fdaCompliance: {
+        disclaimer,
+        sources,
+        educationalOnly: true,
+        requiresProviderConsultation: true,
+      },
+      aiReasoning: analysisResult.aiReasoning
+        ? `${analysisResult.aiReasoning}\n\n${FDA_COMPLIANCE.DISCLAIMERS.EDUCATIONAL_ONLY}`
+        : FDA_COMPLIANCE.DISCLAIMERS.EDUCATIONAL_ONLY,
     };
   }
 
@@ -717,7 +834,7 @@ export class AIService {
   async generateClinicalInsights(
     product: Product,
     analysisResult: AIAnalysisResult,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): Promise<{
     clinicalSignificance: string;
     evidenceQuality: string;
@@ -803,7 +920,7 @@ export class AIService {
    */
   private generateRiskBenefitAssessment(
     result: AIAnalysisResult,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): string {
     const safetyScore = result.categoryScores?.safety || 75;
     const overallScore = result.overallScore || 75;
@@ -821,8 +938,8 @@ export class AIService {
     }
 
     if (
-      healthProfile?.conditions?.conditions &&
-      healthProfile.conditions.conditions.length > 0
+      healthProfile?.healthConditions?.conditions &&
+      healthProfile.healthConditions.conditions.length > 0
     ) {
       assessment +=
         '. Additional monitoring recommended due to existing health conditions';
@@ -836,7 +953,7 @@ export class AIService {
    */
   private generateMonitoringRecommendations(
     product: Product,
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): string[] {
     const recommendations = ['Follow recommended dosage instructions'];
 
@@ -924,8 +1041,8 @@ export class AIService {
   private async callModelWithRetry(
     model: any,
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     maxRetries: number = 3
   ): Promise<any> {
     let lastError: Error | null = null;
@@ -979,8 +1096,8 @@ export class AIService {
    */
   private generateEnhancedCacheKey(
     product: Product,
-    stack: StackItem[],
-    healthProfile?: HealthProfile,
+    stack: UserStack[],
+    healthProfile?: UserProfile,
     priority?: string
   ): string {
     const productKey = `${product.id}_${product.name}_${product.brand}`;
@@ -999,12 +1116,20 @@ export class AIService {
   /**
    * Generate health profile key for caching
    */
-  private generateProfileKey(profile: HealthProfile): string {
+  private generateProfileKey(profile: UserProfile): string {
     const demo = profile.demographics;
-    const conditions = profile.conditions?.conditions?.sort().join(',') || '';
-    const allergies = profile.allergies?.substances?.sort().join(',') || '';
-    const goals = profile.goals
-      ? `${profile.goals.primary}_${profile.goals.secondary?.sort().join(',')}`
+    const conditions =
+      profile.healthConditions?.conditions
+        ?.map((c: any) => c.name)
+        .sort()
+        .join(',') || '';
+    const allergies =
+      profile.allergiesAndSensitivities?.allergies
+        ?.map((a: any) => a.name)
+        .sort()
+        .join(',') || '';
+    const goals = profile.healthGoals
+      ? `${profile.healthGoals.primary}_${profile.healthGoals.secondary || ''}`
       : '';
 
     return `${demo?.ageRange}_${demo?.biologicalSex}_${demo?.pregnancyStatus}_${conditions}_${allergies}_${goals}`;

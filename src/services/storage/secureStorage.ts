@@ -74,6 +74,11 @@ export class SecureStorage {
       // Initialize or retrieve master encryption key (works in both modes)
       await this.initializeMasterKey();
 
+      // Clean up any corrupted data entries (only in SQLite mode)
+      if (!this.fallbackMode) {
+        await this.cleanupCorruptedData();
+      }
+
       if (this.fallbackMode) {
         console.log(
           '✅ Secure storage initialized in fallback mode (SecureStore only)'
@@ -86,6 +91,28 @@ export class SecureStorage {
       // Don't throw - allow app to continue with limited functionality
       this.fallbackMode = true;
       console.log('⚠️ Secure storage running in emergency fallback mode');
+    }
+  }
+
+  /**
+   * Clean up corrupted data entries
+   */
+  private async cleanupCorruptedData(): Promise<void> {
+    if (this.fallbackMode || !this.db) {
+      return;
+    }
+
+    try {
+      // Find and remove entries with null or invalid encrypted_data
+      const result = await this.db.runAsync(
+        'DELETE FROM health_data WHERE encrypted_data IS NULL OR encrypted_data = "" OR LENGTH(encrypted_data) < 2'
+      );
+
+      if (result.changes > 0) {
+        console.log(`🧹 Cleaned up ${result.changes} corrupted data entries`);
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup corrupted data:', error);
     }
   }
 
@@ -256,7 +283,7 @@ export class SecureStorage {
       const jsonData = JSON.stringify(data);
 
       if (this.fallbackMode || !this.db) {
-        // Fallback mode: Store in SecureStore only
+        // Fallback mode: Store in SecureStore with index maintenance
         const fallbackKey = `health_data_${userId}_${dataType}_${dataId}`;
         const encrypted = await this.encryptData(jsonData);
         const fallbackData = {
@@ -268,6 +295,7 @@ export class SecureStorage {
           updatedAt: Date.now(),
         };
 
+        // Store the actual data
         await SecureStore.setItemAsync(
           fallbackKey,
           JSON.stringify(fallbackData),
@@ -276,13 +304,56 @@ export class SecureStorage {
           }
         );
 
+        // Maintain index for retrieval
+        const indexKey = `health_data_index_${userId}_${dataType}`;
+        try {
+          const existingIndexData = await SecureStore.getItemAsync(indexKey, {
+            keychainService: 'pharmaguide-secure',
+          });
+
+          let index = { keys: [] };
+          if (existingIndexData) {
+            index = JSON.parse(existingIndexData);
+          }
+
+          // Add or update the key in the index
+          const existingKeyIndex = index.keys.findIndex(
+            (k: any) => k.id === dataId
+          );
+          const keyInfo = {
+            id: dataId,
+            key: fallbackKey,
+            createdAt: Date.now(),
+            updatedAt: Date.now(),
+          };
+
+          if (existingKeyIndex >= 0) {
+            index.keys[existingKeyIndex] = keyInfo;
+          } else {
+            index.keys.push(keyInfo);
+          }
+
+          // Keep only the most recent 10 entries to prevent index bloat
+          index.keys.sort((a: any, b: any) => b.updatedAt - a.updatedAt);
+          index.keys = index.keys.slice(0, 10);
+
+          await SecureStore.setItemAsync(indexKey, JSON.stringify(index), {
+            keychainService: 'pharmaguide-secure',
+          });
+        } catch (indexError) {
+          console.warn(
+            'Failed to update index, but data was stored:',
+            indexError
+          );
+        }
+
         console.log(
           `🔐 Stored encrypted ${dataType} for user ${userId} (fallback mode)`
         );
         return dataId;
       }
 
-      // Normal mode: Store in SQLite
+      // Normal mode: Store in SQLite with proper encryption
       const encrypted = await this.encryptData(jsonData);
       const now = Date.now();
 
@@ -320,17 +391,64 @@ export class SecureStorage {
   ): Promise<any[]> {
     try {
       if (this.fallbackMode || !this.db) {
-        // Fallback mode: Return empty array for now
-        // In a real implementation, we'd scan SecureStore keys
+        // Fallback mode: Retrieve from SecureStore using index
         console.log(
           `📱 Retrieving ${dataType} for user ${userId} (fallback mode)`
         );
-        return [];
+
+        try {
+          // Get the index of stored keys for this user and data type
+          const indexKey = `health_data_index_${userId}_${dataType}`;
+          const indexData = await SecureStore.getItemAsync(indexKey, {
+            keychainService: 'pharmaguide-secure',
+          });
+
+          if (!indexData) {
+            console.log(`📱 No index found for ${dataType} data`);
+            return [];
+          }
+
+          const index = JSON.parse(indexData);
+          const results = [];
+
+          // Retrieve each stored item using the index
+          for (const keyInfo of index.keys || []) {
+            try {
+              const data = await SecureStore.getItemAsync(keyInfo.key, {
+                keychainService: 'pharmaguide-secure',
+              });
+
+              if (data) {
+                const parsedData = JSON.parse(data);
+                // Decrypt the data
+                const decrypted = await this.decryptData(parsedData.encrypted);
+                const healthData = JSON.parse(decrypted);
+                results.push(healthData);
+              }
+            } catch (error) {
+              console.warn(
+                `Failed to retrieve data for key ${keyInfo.key}:`,
+                error
+              );
+            }
+          }
+
+          // Sort by updatedAt (most recent first)
+          results.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+
+          console.log(
+            `✅ Found ${results.length} ${dataType} records in fallback mode`
+          );
+          return results;
+        } catch (error) {
+          console.error('❌ Error retrieving fallback data:', error);
+          return [];
+        }
       }
 
       let query =
         'SELECT * FROM health_data WHERE user_id = ? AND data_type = ?';
-      let params: any[] = [userId, dataType];
+      const params: any[] = [userId, dataType];
 
       if (id) {
         query += ' AND id = ?';
@@ -345,19 +463,55 @@ export class SecureStorage {
       const decryptedData = [];
       for (const row of result as HealthData[]) {
         try {
-          // Note: In real implementation, we'd need to store original data reference
-          // For now, we'll return the encrypted structure to show the concept
-          decryptedData.push({
+          // Decrypt the actual data using proper decryption
+          const encryptedPayload = {
+            data: row.encryptedData,
+            iv: row.iv,
+            salt: row.salt,
+            timestamp: row.createdAt,
+          };
+
+          // Handle both encrypted and unencrypted data safely
+          let actualData;
+          try {
+            // Check if encryptedData exists and is valid
+            if (!row.encryptedData) {
+              console.warn('No encrypted data found, skipping entry');
+              continue;
+            }
+
+            // Try to parse as JSON first (for development/legacy data)
+            if (typeof row.encryptedData === 'string' &&
+                (row.encryptedData.startsWith('{') || row.encryptedData.startsWith('['))) {
+              actualData = JSON.parse(row.encryptedData);
+            } else {
+              // Data is encrypted, attempt to decrypt
+              const decryptedJson = await this.decryptData(encryptedPayload, '{}');
+              actualData = JSON.parse(decryptedJson);
+            }
+          } catch (decryptError) {
+            console.warn('Failed to decrypt/parse data entry, skipping:', decryptError);
+            continue; // Skip corrupted entries instead of crashing
+          }
+
+          console.log(`✅ Successfully retrieved ${row.dataType} data for ${userId}:`, {
             id: row.id,
-            dataType: row.dataType,
-            createdAt: row.createdAt,
-            updatedAt: row.updatedAt,
-            // In production: decrypted actual data would go here
-            _encrypted: true,
-            _hasValidEncryption: true,
+            hasData: !!actualData,
+            keys: Object.keys(actualData || {}),
           });
-        } catch (decryptError) {
-          console.error('❌ Failed to decrypt data entry:', decryptError);
+
+          // Return the actual data with metadata
+          decryptedData.push({
+            ...actualData,
+            id: row.id,
+            _metadata: {
+              dataType: row.dataType,
+              createdAt: row.createdAt,
+              updatedAt: row.updatedAt,
+            },
+          });
+        } catch (parseError) {
+          console.error('❌ Failed to decrypt/parse data entry:', parseError);
           // Skip corrupted entries
         }
       }
@@ -381,7 +535,7 @@ export class SecureStorage {
 
     try {
       let query = 'DELETE FROM health_data WHERE user_id = ?';
-      let params: any[] = [userId];
+      const params: any[] = [userId];
 
       if (dataType) {
         query += ' AND data_type = ?';

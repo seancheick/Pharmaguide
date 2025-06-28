@@ -1,0 +1,78 @@
+# maestro/flows/authentication.yaml
+# Maestro UI testing flows for authentication
+
+appId: com.pharmaguide.app
+name: Authentication Flow Tests
+tags:
+  - authentication
+  - critical
+
+---
+
+# Test 1: User Registration Flow
+- launchApp
+- tapOn: "Sign Up"
+- inputText: "test@example.com"
+- tapOn: "Password"
+- inputText: "SecurePass123!"
+- tapOn: "Confirm Password"
+- inputText: "SecurePass123!"
+- tapOn: "Terms and Conditions"
+- tapOn: "Create Account"
+- assertVisible: "Check your email"
+- takeScreenshot: "registration-success"
+
+---
+
+# Test 2: User Login Flow
+- launchApp
+- tapOn: "Sign In"
+- inputText: "test@example.com"
+- tapOn: "Password"
+- inputText: "SecurePass123!"
+- tapOn: "Sign In"
+- assertVisible: "Welcome to PharmaGuide"
+- takeScreenshot: "login-success"
+
+---
+
+# Test 3: Password Reset Flow
+- launchApp
+- tapOn: "Sign In"
+- tapOn: "Forgot Password?"
+- inputText: "test@example.com"
+- tapOn: "Send Reset Link"
+- assertVisible: "Reset link sent"
+- takeScreenshot: "password-reset"
+
+---
+
+# Test 4: Form Validation
+- launchApp
+- tapOn: "Sign Up"
+- tapOn: "Create Account"
+- assertVisible: "Email is required"
+- assertVisible: "Password is required"
+- inputText: "invalid-email"
+- tapOn: "Password"
+- inputText: "123"
+- tapOn: "Create Account"
+- assertVisible: "Please enter a valid email"
+- assertVisible: "Password must be at least 8 characters"
+- takeScreenshot: "validation-errors"
+
+---
+
+# Test 5: Logout Flow
+- launchApp
+- tapOn: "Sign In"
+- inputText: "test@example.com"
+- tapOn: "Password"
+- inputText: "SecurePass123!"
+- tapOn: "Sign In"
+- assertVisible: "Welcome to PharmaGuide"
+- tapOn: "Profile"
+- tapOn: "Logout"
+- tapOn: "Confirm"
+- assertVisible: "Sign In"
+- takeScreenshot: "logout-success"

@@ -1,21 +1,45 @@
 // src/services/database.ts
 
-import { supabase } from './supabase/client';
 import {
   TABLES,
   RPC_FUNCTIONS,
   STORAGE_BUCKETS,
-  Product,
-  StackItem,
   Interaction,
   ScanResult,
   DatabaseProduct,
   DatabaseUserStack,
   DatabaseInteraction,
   DatabaseScanHistory,
+  CriticalInteractionRule,
+  NutrientLimit,
   IncrementPointsResponse,
   UpdateStreakResponse,
-} from '@/types/database';
+} from '../types/database';
+import type { Product } from '../types';
+import type { UserProfile } from '../types/healthProfile';
+import {
+  transformDbToUserStack,
+  transformDbArrayToUserStack,
+  createStackInsertPayload,
+  validateStackItem,
+  sanitizeStackItem,
+  transformDbToProduct,
+  createProductInsertPayload,
+  validateProduct,
+  sanitizeProduct,
+  transformDbToScanResult,
+  createScanInsertPayload,
+  validateScanResult,
+  sanitizeScanResult,
+  transformDbToUserProfile,
+  transformUserProfileToDb,
+  createUserProfileInsertPayload,
+  createUserProfileUpdatePayload,
+  validateUserProfile,
+  sanitizeUserProfile,
+} from '../utils/databaseTransforms';
+import type { UserStack } from '../types';
+import { supabase } from './supabase/client';
 
 /**
  * Product Service
@@ -41,41 +65,38 @@ export const productService = {
    * Create a new product
    */
   async create(product: Partial<Product>): Promise<Product | null> {
+    // Sanitize and validate input
+    const sanitizedProduct = sanitizeProduct(product);
+    const validationErrors = validateProduct(sanitizedProduct);
+    if (validationErrors.length > 0) {
+      console.error('Product validation failed:', validationErrors);
+      return null;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Use centralized transformation for database insert
+    const dbPayload = createProductInsertPayload(sanitizedProduct, timestamp);
+
     const { data, error } = await supabase
       .from(TABLES.PRODUCTS)
-      .insert({
-        barcode: product.barcode,
-        name: product.name!,
-        brand: product.brand,
-        category: product.category,
-        image_url: product.imageUrl,
-        ingredients: product.ingredients,
-        verified: false,
-      })
+      .insert(dbPayload)
       .select()
       .single();
 
     if (error || !data) return null;
 
-    return this.transformProduct(data);
+    // Use centralized transformation for response
+    return transformDbToProduct(data);
   },
 
   /**
    * Transform database product to app format
+   * @deprecated Use transformDbToProduct from databaseTransforms instead
    */
   transformProduct(dbProduct: DatabaseProduct): Product {
-    return {
-      id: dbProduct.id,
-      barcode: dbProduct.barcode,
-      name: dbProduct.name,
-      brand: dbProduct.brand,
-      category: dbProduct.category,
-      imageUrl: dbProduct.image_url,
-      ingredients: dbProduct.ingredients || [],
-      verified: dbProduct.verified,
-      createdAt: dbProduct.created_at,
-      updatedAt: dbProduct.updated_at,
-    };
+    // Use centralized transformation but handle type differences
+    return transformDbToProduct(dbProduct) as Product;
   },
 };
 
@@ -86,7 +107,7 @@ export const stackService = {
   /**
    * Get user's active stack
    */
-  async getUserStack(userId: string): Promise<StackItem[]> {
+  async getUserStack(userId: string): Promise<UserStack[]> {
     const { data, error } = await supabase
       .from(TABLES.USER_STACK)
       .select('*')
@@ -97,7 +118,8 @@ export const stackService = {
 
     if (error || !data) return [];
 
-    return data.map(this.transformStackItem);
+    // Use centralized transformation
+    return transformDbArrayToUserStack(data);
   },
 
   /**
@@ -105,21 +127,28 @@ export const stackService = {
    */
   async addToStack(
     userId: string,
-    item: Partial<StackItem>
-  ): Promise<StackItem | null> {
+    item: Partial<UserStack>
+  ): Promise<UserStack | null> {
+    // Sanitize and validate input
+    const sanitizedItem = sanitizeStackItem(item);
+    const validationErrors = validateStackItem(sanitizedItem);
+    if (validationErrors.length > 0) {
+      console.error('Validation failed:', validationErrors);
+      return null;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Use centralized transformation for database insert
+    const dbPayload = createStackInsertPayload(
+      sanitizedItem,
+      userId,
+      timestamp
+    );
+
     const { data, error } = await supabase
       .from(TABLES.USER_STACK)
-      .insert({
-        user_id: userId,
-        item_id: item.itemId,
-        name: item.name,
-        type: item.type,
-        dosage: item.dosage,
-        frequency: item.frequency,
-        brand: item.brand,
-        image_url: item.imageUrl,
-        ingredients: item.ingredients,
-      })
+      .insert(dbPayload)
       .select()
       .single();
 
@@ -128,7 +157,8 @@ export const stackService = {
     // Award points for adding to stack
     await pointsService.awardPoints(userId, 10, 'stack_item_added');
 
-    return this.transformStackItem(data);
+    // Use centralized transformation for response
+    return transformDbToUserStack(data);
   },
 
   /**
@@ -147,25 +177,7 @@ export const stackService = {
     return !error;
   },
 
-  /**
-   * Transform database stack item to app format
-   */
-  transformStackItem(dbItem: DatabaseUserStack): StackItem {
-    return {
-      id: dbItem.id,
-      itemId: dbItem.item_id,
-      name: dbItem.name || '',
-      type: dbItem.type || 'supplement',
-      dosage: dbItem.dosage,
-      frequency: dbItem.frequency,
-      active: dbItem.active,
-      brand: dbItem.brand,
-      imageUrl: dbItem.image_url,
-      ingredients: dbItem.ingredients || [],
-      createdAt: dbItem.created_at,
-      updatedAt: dbItem.updated_at,
-    };
-  },
+  // Legacy transformStackItem removed - now using centralized transformations
 };
 
 /**
@@ -337,14 +349,29 @@ export const scanService = {
     scanType: string,
     analysisScore: number
   ): Promise<ScanResult | null> {
+    // Create scan data and validate
+    const scanData: Partial<ScanResult> = {
+      productId,
+      scanType: scanType as ScanResult['scanType'],
+      analysisScore,
+      scannedAt: new Date().toISOString(),
+    };
+
+    const sanitizedScan = sanitizeScanResult(scanData);
+    const validationErrors = validateScanResult(sanitizedScan);
+    if (validationErrors.length > 0) {
+      console.error('Scan validation failed:', validationErrors);
+      return null;
+    }
+
+    const timestamp = new Date().toISOString();
+
+    // Use centralized transformation for database insert
+    const dbPayload = createScanInsertPayload(sanitizedScan, userId, timestamp);
+
     const { data, error } = await supabase
       .from(TABLES.SCAN_HISTORY)
-      .insert({
-        user_id: userId,
-        product_id: productId,
-        scan_type: scanType,
-        analysis_score: analysisScore,
-      })
+      .insert(dbPayload)
       .select(
         `
         *,
@@ -388,20 +415,29 @@ export const scanService = {
 
   /**
    * Transform database scan to app format
+   * @deprecated Use transformDbToScanResult from databaseTransforms instead
    */
   transformScanResult(dbScan: any): ScanResult {
-    return {
-      id: dbScan.id,
-      productId: dbScan.product_id,
-      product: dbScan.product
-        ? productService.transformProduct(dbScan.product)
-        : undefined,
-      scanType: dbScan.scan_type || 'barcode',
-      analysisScore: dbScan.analysis_score || 0,
-      scannedAt: dbScan.scanned_at,
-    };
+    // Use centralized transformation
+    const scanResult = transformDbToScanResult(dbScan);
+
+    // Add product if available
+    if (dbScan.product) {
+      scanResult.product = productService.transformProduct(
+        dbScan.product
+      ) as any;
+    }
+
+    return scanResult;
   },
 };
+
+/**
+ * User Profile Service (HIPAA-Compliant)
+ * Handles anonymized user profile data in Supabase
+ */
+// All user profile/health profile data is now local-only. No Supabase sync or remote storage.
+// Use localHealthProfileService and useHealthProfile for all profile operations.
 
 /**
  * Points Service

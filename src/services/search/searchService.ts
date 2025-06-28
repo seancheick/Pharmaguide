@@ -1,9 +1,9 @@
 // src/services/search/searchService.ts
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataSourceAggregator } from '../dataSources';
 import { openFoodFactsService } from '../products/openfoodfacts';
 import type { Product } from '../../types';
 import { STORAGE_KEYS } from '../../constants';
+import { storageAdapter } from '../storage/storageAdapter';
 
 interface SearchResult {
   id: string;
@@ -27,7 +27,10 @@ interface SearchHistory {
 }
 
 class SearchService {
-  private searchCache = new Map<string, { results: SearchResult[]; timestamp: number }>();
+  private searchCache = new Map<
+    string,
+    { results: SearchResult[]; timestamp: number }
+  >();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   private readonly MAX_RECENT_SEARCHES = 10;
   private readonly MAX_SEARCH_RESULTS = 20;
@@ -39,7 +42,7 @@ class SearchService {
     if (!query.trim()) return [];
 
     const cacheKey = query.toLowerCase().trim();
-    
+
     // Check cache first
     const cached = this.searchCache.get(cacheKey);
     if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
@@ -48,7 +51,7 @@ class SearchService {
     }
 
     console.log('🔍 Searching for products:', query);
-    
+
     try {
       const results: SearchResult[] = [];
 
@@ -69,7 +72,10 @@ class SearchService {
       if (openFoodFactsResults.status === 'fulfilled') {
         results.push(...openFoodFactsResults.value);
       } else {
-        console.warn('OpenFoodFacts search failed:', openFoodFactsResults.reason);
+        console.warn(
+          'OpenFoodFacts search failed:',
+          openFoodFactsResults.reason
+        );
       }
 
       // Remove duplicates and limit results
@@ -152,17 +158,19 @@ class SearchService {
     }
 
     const suggestions: SearchSuggestion[] = [];
-    
+
     // Add recent searches that match
     const recentSearches = await this.getRecentSearches();
     const matchingRecent = recentSearches
-      .filter(search => search.query.toLowerCase().includes(query.toLowerCase()))
+      .filter(search =>
+        search.query.toLowerCase().includes(query.toLowerCase())
+      )
       .slice(0, 3)
       .map(search => ({
         text: search.query,
         type: 'recent' as const,
       }));
-    
+
     suggestions.push(...matchingRecent);
 
     // Add category suggestions
@@ -177,14 +185,14 @@ class SearchService {
    */
   private async getDefaultSuggestions(): Promise<SearchSuggestion[]> {
     const suggestions: SearchSuggestion[] = [];
-    
+
     // Add recent searches
     const recentSearches = await this.getRecentSearches();
     const recentSuggestions = recentSearches.slice(0, 3).map(search => ({
       text: search.query,
       type: 'recent' as const,
     }));
-    
+
     suggestions.push(...recentSuggestions);
 
     // Add popular categories
@@ -211,11 +219,29 @@ class SearchService {
    */
   private getCategorySuggestions(query: string): SearchSuggestion[] {
     const categories = [
-      'Vitamin A', 'Vitamin B', 'Vitamin C', 'Vitamin D', 'Vitamin E', 'Vitamin K',
-      'Calcium', 'Iron', 'Magnesium', 'Zinc', 'Potassium',
-      'Omega-3', 'Fish Oil', 'Protein', 'Creatine', 'BCAA',
-      'Probiotics', 'Prebiotics', 'Digestive Enzymes',
-      'Multivitamin', 'Prenatal', 'Men\'s Health', 'Women\'s Health',
+      'Vitamin A',
+      'Vitamin B',
+      'Vitamin C',
+      'Vitamin D',
+      'Vitamin E',
+      'Vitamin K',
+      'Calcium',
+      'Iron',
+      'Magnesium',
+      'Zinc',
+      'Potassium',
+      'Omega-3',
+      'Fish Oil',
+      'Protein',
+      'Creatine',
+      'BCAA',
+      'Probiotics',
+      'Prebiotics',
+      'Digestive Enzymes',
+      'Multivitamin',
+      'Prenatal',
+      "Men's Health",
+      "Women's Health",
     ];
 
     return categories
@@ -230,13 +256,13 @@ class SearchService {
   /**
    * Save search to history
    */
-  private async saveSearchHistory(query: string, resultCount: number): Promise<void> {
+  async saveSearchHistory(query: string, resultCount: number): Promise<void> {
     try {
       const history = await this.getRecentSearches();
-      
+
       // Remove existing entry for this query
       const filteredHistory = history.filter(item => item.query !== query);
-      
+
       // Add new entry at the beginning
       const newHistory: SearchHistory[] = [
         {
@@ -247,7 +273,7 @@ class SearchService {
         ...filteredHistory,
       ].slice(0, this.MAX_RECENT_SEARCHES);
 
-      await AsyncStorage.setItem(
+      await storageAdapter.setItem(
         STORAGE_KEYS.RECENT_SEARCHES || '@pharmaguide_recent_searches',
         JSON.stringify(newHistory)
       );
@@ -261,7 +287,7 @@ class SearchService {
    */
   async getRecentSearches(): Promise<SearchHistory[]> {
     try {
-      const stored = await AsyncStorage.getItem(
+      const stored = await storageAdapter.getItem(
         STORAGE_KEYS.RECENT_SEARCHES || '@pharmaguide_recent_searches'
       );
       return stored ? JSON.parse(stored) : [];
@@ -276,7 +302,7 @@ class SearchService {
    */
   async clearSearchHistory(): Promise<void> {
     try {
-      await AsyncStorage.removeItem(
+      await storageAdapter.removeItem(
         STORAGE_KEYS.RECENT_SEARCHES || '@pharmaguide_recent_searches'
       );
     } catch (error) {

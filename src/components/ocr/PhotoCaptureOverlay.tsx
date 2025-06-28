@@ -12,6 +12,8 @@ import {
 } from 'react-native';
 import { CameraView, Camera, useCameraPermissions } from 'expo-camera';
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { cameraPermissionService } from '../../services/permissions/cameraPermissionService';
+import { useCameraLifecycle } from '../../hooks/useCameraLifecycle';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 
 interface PhotoCaptureOverlayProps {
@@ -35,11 +37,39 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
   const cameraRef = useRef<CameraView>(null);
   const pulseAnimation = useRef(new Animated.Value(1)).current;
 
+  // Smart camera lifecycle management for OCR
+  const {
+    isActive: isCameraActive,
+    isSuspended: isCameraSuspended,
+    suspendReason,
+    activateCamera,
+    suspendCamera,
+  } = useCameraLifecycle({
+    autoSuspendDelay: 60000, // 1 minute for OCR (longer than barcode)
+    enableAppStateHandling: true,
+    enableTabFocusHandling: true,
+    enableInactivitySuspend: true,
+    logPerformance: true,
+  });
+
   React.useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
-    }
-  }, [permission, requestPermission]);
+    const initializeCamera = async () => {
+      if (!permission?.granted) {
+        await cameraPermissionService.requestCameraPermission({
+          context: 'ocr',
+          showHIPAACompliance: true,
+          onGranted: () => {
+            console.log('📷 Camera permission granted for OCR');
+          },
+          onDenied: () => {
+            console.log('📷 Camera permission denied for OCR');
+          },
+        });
+      }
+    };
+
+    initializeCamera();
+  }, [permission]);
 
   React.useEffect(() => {
     // Start pulse animation for capture guide
@@ -129,11 +159,19 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
           <Ionicons name="camera-outline" size={64} color={COLORS.gray400} />
           <Text style={styles.permissionTitle}>Camera Access Required</Text>
           <Text style={styles.permissionMessage}>
-            We need camera access to capture supplement labels for text recognition.
+            We need camera access to capture supplement labels for text
+            recognition.
+            {'\n\n'}🔒 Privacy Protection: Images are processed locally using
+            on-device AI. No photos are stored or shared.
           </Text>
           <TouchableOpacity
             style={styles.permissionButton}
-            onPress={requestPermission}
+            onPress={() =>
+              cameraPermissionService.requestCameraPermission({
+                context: 'ocr',
+                showHIPAACompliance: true,
+              })
+            }
           >
             <Text style={styles.permissionButtonText}>Grant Permission</Text>
           </TouchableOpacity>
@@ -145,21 +183,52 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.cameraContainer}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing="back"
-          flash={flashEnabled ? 'on' : 'off'}
-        />
+        {/* Only render camera when active to save resources */}
+        {isCameraActive && (
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing="back"
+            flash={flashEnabled ? 'on' : 'off'}
+          />
+        )}
+
+        {/* Camera suspended overlay */}
+        {isCameraSuspended && (
+          <View style={styles.suspendedOverlay}>
+            <View style={styles.suspendedContent}>
+              <Ionicons
+                name="pause-circle"
+                size={48}
+                color={COLORS.textSecondary}
+              />
+              <Text style={styles.suspendedTitle}>Camera Paused</Text>
+              <Text style={styles.suspendedMessage}>
+                {suspendReason === 'tab_blur' &&
+                  'Camera paused when switching tabs'}
+                {suspendReason === 'app_background' &&
+                  'Camera paused when app is in background'}
+                {suspendReason === 'inactivity' &&
+                  'Camera paused due to inactivity'}
+                {!suspendReason && 'Camera is temporarily paused'}
+              </Text>
+              <TouchableOpacity
+                style={styles.resumeButton}
+                onPress={activateCamera}
+              >
+                <Ionicons name="camera" size={20} color={COLORS.white} />
+                <Text style={styles.resumeButtonText}>Resume Camera</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.headerButton} onPress={onClose}>
             <Ionicons name="close" size={24} color={COLORS.white} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>
-            {title || 'Capture Label'}
-          </Text>
+          <Text style={styles.headerTitle}>{title || 'Capture Label'}</Text>
           <TouchableOpacity style={styles.headerButton} onPress={toggleFlash}>
             <Ionicons
               name={flashEnabled ? 'flash' : 'flash-off'}
@@ -202,10 +271,7 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
         {/* Bottom Controls */}
         <View style={styles.bottomControls}>
           <View style={styles.controlsContainer}>
-            <TouchableOpacity
-              style={styles.cancelButton}
-              onPress={onClose}
-            >
+            <TouchableOpacity style={styles.cancelButton} onPress={onClose}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
 
@@ -219,7 +285,11 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
             >
               <View style={styles.captureButtonInner}>
                 {isCapturing ? (
-                  <MaterialIcons name="hourglass-empty" size={32} color={COLORS.white} />
+                  <MaterialIcons
+                    name="hourglass-empty"
+                    size={32}
+                    color={COLORS.white}
+                  />
                 ) : (
                   <Ionicons name="camera" size={32} color={COLORS.white} />
                 )}
@@ -228,12 +298,18 @@ export const PhotoCaptureOverlay: React.FC<PhotoCaptureOverlayProps> = ({
 
             <TouchableOpacity
               style={styles.helpButton}
-              onPress={() => Alert.alert(
-                'Photo Tips',
-                '• Ensure good lighting\n• Hold camera steady\n• Keep text in focus\n• Avoid shadows and glare'
-              )}
+              onPress={() =>
+                Alert.alert(
+                  'Photo Tips',
+                  '• Ensure good lighting\n• Hold camera steady\n• Keep text in focus\n• Avoid shadows and glare'
+                )
+              }
             >
-              <Ionicons name="help-circle-outline" size={24} color={COLORS.white} />
+              <Ionicons
+                name="help-circle-outline"
+                size={24}
+                color={COLORS.white}
+              />
             </TouchableOpacity>
           </View>
         </View>
@@ -439,5 +515,45 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.base,
     fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.white,
+  },
+  // Camera suspended overlay styles
+  suspendedOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.black,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  suspendedContent: {
+    alignItems: 'center',
+    paddingHorizontal: SPACING.xl,
+  },
+  suspendedTitle: {
+    fontSize: TYPOGRAPHY.sizes.xl,
+    fontWeight: TYPOGRAPHY.weights.bold,
+    color: COLORS.white,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+  },
+  suspendedMessage: {
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.gray300,
+    textAlign: 'center',
+    lineHeight: 24,
+    marginBottom: SPACING.xl,
+  },
+  resumeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    borderRadius: 12,
+    gap: SPACING.sm,
+  },
+  resumeButtonText: {
+    color: COLORS.white,
+    fontSize: TYPOGRAPHY.sizes.base,
+    fontWeight: TYPOGRAPHY.weights.semibold,
   },
 });

@@ -1,4 +1,25 @@
 {
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[json]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  },
+  "codium.codeCompletion.enable": true,
+  "deno.disablePaths": [
+    "src/",
+    "App.tsx",
+    "index.ts"
+  ],
   "deno.enablePaths": [
     "supabase/functions"
   ],
@@ -18,9 +39,12 @@
     "http",
     "net"
   ],
-  "editor.formatOnSave": true,
   "editor.codeActionsOnSave": {
     "source.fixAll.eslint": "explicit"
+  },
+  "editor.formatOnSave": true,
+  "emmet.includeLanguages": {
+    "typescriptreact": "html"
   },
   "eslint.validate": [
     "javascript",
@@ -28,44 +52,21 @@
     "typescript",
     "typescriptreact"
   ],
-  "typescript.preferences.importModuleSpecifier": "relative",
-  "typescript.suggest.autoImports": true,
-  "typescript.updateImportsOnFileMove.enabled": "always",
   "files.associations": {
-    "*.tsx": "typescriptreact",
-    "*.ts": "typescript"
-  },
-  "emmet.includeLanguages": {
-    "typescriptreact": "html"
-  },
-  "search.exclude": {
-    "**/node_modules": true,
-    "**/dist": true,
-    "**/.expo": true,
-    "**/web-build": true
+    "*.ts": "typescript",
+    "*.tsx": "typescriptreact"
   },
   "files.exclude": {
     "**/.expo": true,
     "**/web-build": true
   },
-  "[typescript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
+  "search.exclude": {
+    "**/.expo": true,
+    "**/dist": true,
+    "**/node_modules": true,
+    "**/web-build": true
   },
-  "[typescriptreact]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[javascript]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[javascriptreact]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "[json]": {
-    "editor.defaultFormatter": "esbenp.prettier-vscode"
-  },
-  "deno.disablePaths": [
-    "src/",
-    "App.tsx",
-    "index.ts"
-  ]
+  "typescript.preferences.importModuleSpecifier": "relative",
+  "typescript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always"
 }

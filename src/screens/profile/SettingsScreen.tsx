@@ -106,11 +106,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const accountSettings: SettingItem[] = [
     {
       id: 'export_data',
-      title: 'Export Data',
-      description: 'Download your health profile and scan history',
+      title: 'Export Health Profile',
+      description: 'Export your health profile as an encrypted file',
       icon: 'download',
       type: 'action',
       onPress: () => handleExportData(),
+    },
+    {
+      id: 'import_data',
+      title: 'Import Health Profile',
+      description: 'Restore your health profile from an encrypted file',
+      icon: 'cloud-upload',
+      type: 'action',
+      onPress: () => handleImportData(),
     },
     {
       id: 'delete_account',
@@ -123,15 +131,112 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     },
   ];
 
-  const handleExportData = () => {
-    Alert.alert(
-      'Export Data',
-      'Your data will be prepared and sent to your email address. This may take a few minutes.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Export', onPress: () => console.log('Exporting data...') },
-      ]
-    );
+  // --- ENCRYPTED EXPORT/IMPORT LOGIC ---
+  const handleExportData = async () => {
+    try {
+      // Prompt for password
+      let password = '';
+      Alert.prompt(
+        'Export Health Profile',
+        'Enter a password to encrypt your export file:',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Export',
+            onPress: async (input) => {
+              password = input;
+              if (!password) {
+                Alert.alert('Error', 'Password is required for encryption.');
+                return;
+              }
+              // Dynamically import crypto-js for AES
+              const CryptoJS = await import('crypto-js');
+              // Get health profile from local storage service
+              const { localHealthProfileService } = await import('../../services/health/localHealthProfileService');
+              const { useAuth } = await import('../../hooks/useAuth');
+              const user = useAuth().user;
+              const profile = await localHealthProfileService.getHealthProfile(user.id);
+              if (!profile) {
+                Alert.alert('Error', 'No health profile found to export.');
+                return;
+              }
+              const json = JSON.stringify(profile);
+              const ciphertext = CryptoJS.AES.encrypt(json, password).toString();
+              // For MVP: Show the encrypted string in an alert (in real app, save/share as file)
+              Alert.alert('Exported Data (MVP)', ciphertext);
+            },
+          },
+        ],
+        'secure-text'
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to export health profile.');
+    }
+  };
+
+  const handleImportData = async () => {
+    try {
+      // Prompt for encrypted data and password
+      let ciphertext = '';
+      let password = '';
+      Alert.prompt(
+        'Import Health Profile',
+        'Paste your encrypted export file:',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+          {
+            text: 'Next',
+            onPress: (input) => {
+              ciphertext = input;
+              Alert.prompt(
+                'Enter Password',
+                'Enter the password used to encrypt the file:',
+                [
+                  {
+                    text: 'Cancel',
+                    style: 'cancel',
+                  },
+                  {
+                    text: 'Import',
+                    onPress: async (inputPwd) => {
+                      password = inputPwd;
+                      if (!ciphertext || !password) {
+                        Alert.alert('Error', 'Both encrypted data and password are required.');
+                        return;
+                      }
+                      try {
+                        const CryptoJS = await import('crypto-js');
+                        const bytes = CryptoJS.AES.decrypt(ciphertext, password);
+                        const decrypted = bytes.toString(CryptoJS.enc.Utf8);
+                        if (!decrypted) throw new Error('Decryption failed');
+                        const profile = JSON.parse(decrypted);
+                        const { localHealthProfileService } = await import('../../services/health/localHealthProfileService');
+                        const { useAuth } = await import('../../hooks/useAuth');
+                        const user = useAuth().user;
+                        await localHealthProfileService.saveHealthProfile(user.id, profile);
+                        Alert.alert('Success', 'Health profile imported successfully!');
+                      } catch (e) {
+                        Alert.alert('Error', 'Failed to decrypt or import profile.');
+                      }
+                    },
+                  },
+                ],
+                'secure-text'
+              );
+            },
+          },
+        ],
+        'plain-text'
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to import health profile.');
+    }
   };
 
   const handleDeleteAccount = () => {

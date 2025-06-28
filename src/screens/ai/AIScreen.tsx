@@ -26,6 +26,8 @@ import { handleAIConsentError } from '../../hooks/useAIConsent';
 import { OfflineIndicator } from '../../components/common/OfflineIndicator';
 import { useNetworkState } from '../../hooks/useNetworkState';
 import type { AIScreenProps } from '../../types/navigation';
+import { useToast } from '../../hooks/useToast';
+import { LoadingScreen } from '../../components/common/LoadingScreen';
 
 // Helper function to format timestamps
 const formatTimestamp = (date: Date) => {
@@ -245,8 +247,13 @@ const TypingIndicator = () => {
   );
 };
 
-export function AIScreen() {
+export function AIScreen({ route }: { route?: any }) {
   const navigation = useNavigation<AIScreenProps['navigation']>();
+  const { showError, showInfo } = useToast();
+
+  // Get product context from navigation params
+  const productContext = route?.params?.productContext;
+
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -289,31 +296,68 @@ export function AIScreen() {
       history.length === 0 ||
       (history.length === 1 && history[0].role === 'system')
     ) {
+      // Check if we have product context from navigation
+      let welcomeContent =
+        "Hello! I'm your AI Pharmacist. I can help you understand supplements, check interactions, suggest dosages, and answer your health questions. What would you like to know?";
+      let quickActions = [
+        {
+          label: 'Check my stack',
+          onPress: () =>
+            handleSuggestedQuestion(
+              'Can you review my current supplement stack for interactions?'
+            ),
+        },
+        {
+          label: 'Dosage help',
+          onPress: () =>
+            handleSuggestedQuestion(
+              'What are the recommended dosages for common vitamins?'
+            ),
+        },
+      ];
+
+      // If we have product context, customize the welcome message
+      if (productContext) {
+        welcomeContent = `Hello! I see you'd like to discuss ${productContext.name}${productContext.brand ? ` by ${productContext.brand}` : ''}. I'm here to help you understand this supplement, its interactions, dosing, and how it fits with your health goals. What would you like to know?`;
+        quickActions = [
+          {
+            label: 'Check interactions',
+            onPress: () =>
+              handleSuggestedQuestion(
+                `What interactions should I watch for with ${productContext.name}?`
+              ),
+          },
+          {
+            label: 'Dosage guidance',
+            onPress: () =>
+              handleSuggestedQuestion(
+                `What's the recommended dosage for ${productContext.name}?`
+              ),
+          },
+          {
+            label: 'Best time to take',
+            onPress: () =>
+              handleSuggestedQuestion(
+                `When is the best time to take ${productContext.name}?`
+              ),
+          },
+        ];
+
+        // If there's an initial message, set it as input
+        if (productContext.initialMessage) {
+          setInputText(productContext.initialMessage);
+        }
+      }
+
       // Add welcome message with quick actions
       const welcomeMessage: ChatMessage = {
         id: Date.now().toString(),
         role: 'assistant',
-        content:
-          "Hello! I'm your AI Pharmacist. I can help you understand supplements, check interactions, suggest dosages, and answer your health questions. What would you like to know?",
+        content: welcomeContent,
         timestamp: new Date(),
         metadata: {
           sources: [{ badge: '👋', text: 'Welcome' }],
-          quickActions: [
-            {
-              label: 'Check my stack',
-              onPress: () =>
-                handleSuggestedQuestion(
-                  'Can you review my current supplement stack for interactions?'
-                ),
-            },
-            {
-              label: 'Dosage help',
-              onPress: () =>
-                handleSuggestedQuestion(
-                  'What are the recommended dosages for common vitamins?'
-                ),
-            },
-          ],
+          quickActions,
         },
       };
       setMessages([welcomeMessage]);
@@ -392,6 +436,11 @@ export function AIScreen() {
     } catch (error) {
       console.error('Error sending message:', error);
       setIsTyping(false);
+
+      // Show toast notification
+      showError(
+        "I'm having trouble processing your request. Please try again."
+      );
 
       // Add error message
       const errorMessage: ChatMessage = {

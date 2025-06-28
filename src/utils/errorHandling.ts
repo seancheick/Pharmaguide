@@ -25,7 +25,7 @@ export interface AppError {
   message: string;
   userMessage: string;
   code?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   timestamp: number;
   userId?: string;
   action?: string;
@@ -41,7 +41,7 @@ export const createError = (
   userMessage: string,
   options: {
     code?: string;
-    details?: Record<string, any>;
+    details?: Record<string, unknown>;
     userId?: string;
     action?: string;
   } = {}
@@ -60,18 +60,47 @@ export const createError = (
 };
 
 /**
+ * Type guard: checks if value is an object with a string property
+ */
+function hasStringProp(
+  obj: unknown,
+  prop: string
+): obj is { [key: string]: string } {
+  return (
+    typeof obj === 'object' &&
+    obj !== null &&
+    typeof (obj as Record<string, unknown>)[prop] === 'string'
+  );
+}
+
+/**
+ * Type guard: checks if value is an object with a nested object property
+ */
+function hasNestedProp(
+  obj: unknown,
+  prop: string
+): obj is { [key: string]: unknown } {
+  return typeof obj === 'object' && obj !== null && prop in obj;
+}
+
+/**
  * Sanitize error message to prevent information leakage
  */
-export const sanitizeErrorMessage = (error: any): string => {
+export const sanitizeErrorMessage = (error: unknown): string => {
   if (!error) return 'An unexpected error occurred';
 
   // If it's already an AppError, return the user message
-  if (error.userMessage) {
+  if (hasStringProp(error, 'userMessage')) {
     return error.userMessage;
   }
 
   // Handle common error patterns
-  const message = String(error.message || error.toString()).toLowerCase();
+  let message = '';
+  if (hasStringProp(error, 'message')) {
+    message = error.message.toLowerCase();
+  } else if (typeof error?.toString === 'function') {
+    message = String(error.toString()).toLowerCase();
+  }
 
   // Authentication errors
   if (message.includes('unauthorized') || message.includes('401')) {
@@ -99,7 +128,9 @@ export const sanitizeErrorMessage = (error: any): string => {
 
   // Validation errors (pass through as they're usually safe)
   if (message.includes('validation') || message.includes('invalid')) {
-    return error.message || 'Invalid input provided';
+    return hasStringProp(error, 'message')
+      ? error.message
+      : 'Invalid input provided';
   }
 
   // Default safe message
@@ -109,9 +140,35 @@ export const sanitizeErrorMessage = (error: any): string => {
 /**
  * Handle API errors with proper categorization
  */
-export const handleApiError = (error: any, action?: string, userId?: string): AppError => {
-  const status = error.status || error.response?.status;
-  const message = error.message || error.response?.data?.message || 'Unknown error';
+export const handleApiError = (
+  error: unknown,
+  action?: string,
+  userId?: string
+): AppError => {
+  let status: unknown = undefined;
+  let message: string = 'Unknown error';
+  if (hasStringProp(error, 'message')) {
+    message = error.message;
+  }
+  if (hasNestedProp(error, 'status')) {
+    status = (error as { status: unknown }).status;
+  } else if (
+    hasNestedProp(error, 'response') &&
+    hasNestedProp((error as { response: unknown }).response, 'status')
+  ) {
+    status = (error as { response: { status: unknown } }).response.status;
+  }
+  if (
+    hasNestedProp(error, 'response') &&
+    hasNestedProp((error as { response: unknown }).response, 'data') &&
+    hasStringProp(
+      (error as { response: { data: unknown } }).response.data,
+      'message'
+    )
+  ) {
+    message = (error as { response: { data: { message: string } } }).response
+      .data.message;
+  }
 
   let type: ErrorType;
   let severity: ErrorSeverity;
@@ -155,7 +212,8 @@ export const handleApiError = (error: any, action?: string, userId?: string): Ap
       if (!status) {
         type = ErrorType.NETWORK;
         severity = ErrorSeverity.MEDIUM;
-        userMessage = 'Network connection error. Please check your internet connection.';
+        userMessage =
+          'Network connection error. Please check your internet connection.';
       } else {
         type = ErrorType.UNKNOWN;
         severity = ErrorSeverity.MEDIUM;
@@ -176,12 +234,12 @@ export const handleApiError = (error: any, action?: string, userId?: string): Ap
  */
 export const handleValidationError = (
   field: string,
-  value: any,
+  value: unknown,
   rule: string,
   userId?: string
 ): AppError => {
   const userMessage = `${field} ${rule}`;
-  
+
   return createError(
     ErrorType.VALIDATION,
     ErrorSeverity.LOW,
@@ -189,7 +247,11 @@ export const handleValidationError = (
     userMessage,
     {
       code: 'VALIDATION_ERROR',
-      details: { field, value: typeof value === 'string' ? value.substring(0, 100) : value, rule },
+      details: {
+        field,
+        value: typeof value === 'string' ? value.substring(0, 100) : value,
+        rule,
+      },
       userId,
       action: 'validation',
     }
@@ -199,9 +261,12 @@ export const handleValidationError = (
 /**
  * Handle authentication errors
  */
-export const handleAuthError = (error: any, userId?: string): AppError => {
-  const message = error.message || 'Authentication failed';
-  
+export const handleAuthError = (error: unknown, userId?: string): AppError => {
+  let message = 'Authentication failed';
+  if (hasStringProp(error, 'message')) {
+    message = error.message;
+  }
+
   let userMessage: string;
   let code: string;
 
@@ -250,7 +315,10 @@ export const logError = (error: AppError): void => {
     message: __DEV__ ? error.message : 'Error logged',
   };
 
-  if (error.severity === ErrorSeverity.CRITICAL || error.severity === ErrorSeverity.HIGH) {
+  if (
+    error.severity === ErrorSeverity.CRITICAL ||
+    error.severity === ErrorSeverity.HIGH
+  ) {
     console.error('App Error:', logData);
   } else {
     console.warn('App Warning:', logData);
@@ -263,11 +331,11 @@ export const logError = (error: AppError): void => {
 /**
  * Create user-friendly error messages for common scenarios
  */
-export const getErrorMessage = (error: any, context?: string): string => {
+export const getErrorMessage = (error: unknown, context?: string): string => {
   if (!error) return 'An unexpected error occurred';
 
   // If it's already an AppError, return the user message
-  if (error.userMessage) {
+  if (hasStringProp(error, 'userMessage')) {
     return error.userMessage;
   }
 
@@ -300,29 +368,29 @@ export const withRetry = async <T>(
   maxRetries: number = 3,
   baseDelay: number = 1000
 ): Promise<T> => {
-  let lastError: any;
+  let lastError: unknown;
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       return await operation();
     } catch (error) {
       lastError = error;
-
       // Don't retry on certain error types
-      if (error.status === 401 || error.status === 403 || error.status === 404) {
+      let status: unknown = undefined;
+      if (hasNestedProp(error, 'status')) {
+        status = (error as { status: unknown }).status;
+      }
+      if (status === 401 || status === 403 || status === 404) {
         throw error;
       }
-
       // Don't retry on last attempt
       if (attempt === maxRetries) {
         break;
       }
-
       // Exponential backoff
       const delay = baseDelay * Math.pow(2, attempt);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
-
   throw lastError;
 };

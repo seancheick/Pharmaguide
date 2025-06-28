@@ -12,6 +12,8 @@ import { useNavigation } from '@react-navigation/native';
 import type { ScanScreenProps } from '../../types/navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, AnimatedTouchable } from '../../components/common';
+import { useToast } from '../../hooks/useToast';
+import { EmptyState } from '../../components/common/EmptyState';
 import { BarcodeScanner } from './BarcodeScanner';
 import { ProductAnalysisResults } from './ProductAnalysisResults';
 import { productService } from '../../services/products';
@@ -23,6 +25,7 @@ type ScanScreenState = 'idle' | 'scanning' | 'processing' | 'results';
 
 export const ScanScreen = () => {
   const navigation = useNavigation<ScanScreenProps['navigation']>();
+  const { showError, showInfo } = useToast();
   const [screenState, setScreenState] = useState<ScanScreenState>('idle');
   const [product, setProduct] = useState<Product | null>(null);
   const [analysis, setAnalysis] = useState<ProductAnalysis | null>(null);
@@ -60,6 +63,9 @@ export const ScanScreen = () => {
         errorMessage.toLowerCase().includes('no product');
 
       if (isProductNotFound) {
+        showError('Product not found in our database');
+        setScreenState('idle');
+        // Show options for product not found
         Alert.alert(
           'Product Not Found',
           "This product isn't in our database yet. What would you like to do?",
@@ -84,21 +90,8 @@ export const ScanScreen = () => {
           ]
         );
       } else {
-        Alert.alert(
-          'Analysis Failed',
-          'Unable to analyze this product. Please try scanning another barcode.',
-          [
-            {
-              text: 'Try Again',
-              onPress: () => setScreenState('scanning'),
-            },
-            {
-              text: 'Cancel',
-              onPress: () => setScreenState('idle'),
-              style: 'cancel',
-            },
-          ]
-        );
+        showError('Unable to analyze this product. Please try again.');
+        setScreenState('idle');
       }
     } finally {
       setIsLoading(false);

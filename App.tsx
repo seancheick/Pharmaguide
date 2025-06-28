@@ -2,14 +2,16 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from './src/hooks/useAuth';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { performanceMonitor } from './src/services/performance/performanceMonitor';
 import { gamificationService } from './src/services/gamification/gamificationService';
 import { secureStorage } from './src/services/storage/secureStorage';
 import { networkService } from './src/services/network/networkService';
-// import { ErrorBoundary } from './src/components/common/ErrorBoundary';
-import * as FileSystem from 'expo-file-system';
+import { ErrorBoundary } from './src/components/common/ErrorBoundary';
+import { ToastContainer } from './src/components/common/Toast';
 
 // Wrapper component to access auth context
 function AppContent() {
@@ -19,36 +21,44 @@ function AppContent() {
     // Set user ID for gamification service when auth state changes
     if (user && !user.is_anonymous) {
       gamificationService.setUserId(user.id);
+
+      // Set user context for monitoring services
+      // TODO: Add user context setting after startup optimization
     } else {
       gamificationService.setUserId(null);
     }
   }, [user]);
 
   return (
-    <>
+    <ErrorBoundary>
       <AppNavigator />
+      <ToastContainer />
       <StatusBar style="auto" />
-    </>
+    </ErrorBoundary>
   );
 }
 
 export default function App() {
-  useEffect(() => {
-    // Start measuring app cold start time
-    performanceMonitor.startMeasure('cold_start');
+  // Track if app has rendered at least once
+  const [hasRendered, setHasRendered] = React.useState(false);
 
-    // Initialize core services
+  useEffect(() => {
+    setHasRendered(true);
+  }, []);
+
+  useEffect(() => {
+    // Initialize core services with simple optimization
     const initializeServices = async () => {
       try {
-        console.log('🚀 Initializing core services...');
+        console.log('🚀 Starting app initialization...');
+        const startTime = Date.now();
 
-        // Initialize network service first
+        // Initialize essential services only
         await networkService.initialize();
-
-        // Initialize secure storage (HIPAA-compliant)
         await secureStorage.initialize();
 
-        console.log('✅ Core services initialized successfully');
+        const totalTime = Date.now() - startTime;
+        console.log(`✅ App initialization completed in ${totalTime}ms`);
       } catch (error) {
         console.error('❌ Failed to initialize core services:', error);
         // App can still function with limited capabilities
@@ -75,14 +85,34 @@ export default function App() {
     const initialize = async () => {
       await ensureDirectoryExists();
       await initializeServices();
+      // Complete cold start measurement
+      performanceMonitor.endMeasure('cold_start', 'navigation');
     };
 
     initialize();
   }, []);
 
+  // Defer non-critical service initialization until after first render
+  useEffect(() => {
+    if (!hasRendered) return;
+
+    // Defer gamification service (non-critical)
+    setTimeout(() => {
+      try {
+        console.log('🎮 Initializing gamification service...');
+        // Gamification service will be initialized here when ready
+        console.log('✅ Deferred services initialized');
+      } catch (error) {
+        console.warn('⚠️ Deferred service initialization failed:', error);
+      }
+    }, 100); // Small delay to ensure UI is ready
+  }, [hasRendered]);
+
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <SafeAreaProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }

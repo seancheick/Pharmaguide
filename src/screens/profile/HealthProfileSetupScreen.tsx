@@ -17,6 +17,7 @@ import { ConsentModal } from '../../components/privacy/ConsentModal';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import type { ConsentType, ProfileSetupStep } from '../../types/healthProfile';
 import { HealthProfileSetupScreenProps } from '../../types/navigation';
+import { useHealthProfile } from '../../hooks/useHealthProfile';
 
 // Storage keys for persistence
 const STORAGE_KEYS = {
@@ -37,8 +38,8 @@ export const HealthProfileSetupScreen: React.FC<
   const [setupData, setSetupData] = useState<Record<string, unknown>>({});
   const [isLoading, setIsLoading] = useState(true);
 
-  // ⚡ OPTIMIZED: Streamlined 5-step flow (medications moved to Stack tab)
-  const setupSteps: ProfileSetupStep[] = [
+  // 📋 STEP DEFINITIONS: Define the 5-step health profile setup flow
+  const stepDefinitions: ProfileSetupStep[] = [
     {
       id: 'privacy_consent',
       title: 'Privacy & Consent',
@@ -62,45 +63,54 @@ export const HealthProfileSetupScreen: React.FC<
       description: 'What do you want to achieve? (Pick up to 3)',
       required: false,
       completed: false,
-      estimatedTime: 1,
+      estimatedTime: 2,
     },
     {
       id: 'health_conditions',
       title: 'Health Conditions',
-      description: 'Optional - for condition-specific warnings',
+      description: 'Any conditions we should know about?',
       required: false,
       completed: false,
-      consentRequired: true,
       estimatedTime: 2,
     },
     {
       id: 'allergies',
-      title: 'Allergies',
-      description: 'Critical safety information',
+      title: 'Allergies & Sensitivities',
+      description: 'Food, drug, or environmental allergies',
       required: false,
       completed: false,
-      consentRequired: true,
       estimatedTime: 1,
     },
   ];
 
-  const [steps, setSteps] = useState(setupSteps);
+  // Restore local steps state for guided setup flow
+  const [steps, setSteps] = useState<ProfileSetupStep[]>(stepDefinitions);
 
-  // 📊 SMART: Progress calculation for 5-step flow
-  const getProgressPercentage = useCallback(() => {
-    const completedSteps = steps.filter(step => step.completed).length;
-    return (completedSteps / 5) * 100; // Updated for 5 steps (removed medications step)
-  }, [steps]);
+  // 🔒 HIPAA-compliant health profile management
+  const {
+    updateProfile,
+    loading: profileLoading,
+    completeness,
+    refreshProfile,
+  } = useHealthProfile();
 
-  // ✨ SLEEK: Smooth animations
+  // Refresh health profile and completeness on focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      refreshProfile();
+    });
+    return unsubscribe;
+  }, [navigation, refreshProfile]);
+
+  // ✨ SLEEK: Smooth animations (now based on shared completeness)
   const animateProgress = useCallback(() => {
-    const progress = getProgressPercentage() / 100;
+    const progress = (completeness || 0) / 100;
     Animated.timing(progressAnim, {
       toValue: progress,
       duration: 500,
       useNativeDriver: false,
     }).start();
-  }, [progressAnim, getProgressPercentage]);
+  }, [progressAnim, completeness]);
 
   // 💾 Save progress to AsyncStorage
   const saveProgress = useCallback(async () => {
@@ -191,8 +201,6 @@ export const HealthProfileSetupScreen: React.FC<
     }
   };
 
-  // Remove duplicate animateProgress function
-
   // ⚖️ LEGAL: Proper consent handling
   const handleConsentGranted = async (
     grantedConsents: Record<ConsentType, boolean>
@@ -200,13 +208,8 @@ export const HealthProfileSetupScreen: React.FC<
     try {
       setConsents(grantedConsents);
       setShowConsentModal(false);
-
-      setSteps(prev =>
-        prev.map(step =>
-          step.id === 'privacy_consent' ? { ...step, completed: true } : step
-        )
-      );
-
+      // Mark privacy_consent step as completed
+      await updateStepCompletion('privacy_consent', true);
       setCurrentStep(1);
     } catch (error) {
       console.error('Consent error:', error);
@@ -239,8 +242,11 @@ export const HealthProfileSetupScreen: React.FC<
 
     const screenName = screenMap[stepId];
     if (screenName) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      navigation.navigate(screenName as any);
+      // Pass saved data for this step as initialValue prop
+      navigation.navigate(screenName as any, {
+        initialValue: setupData[stepId] || null,
+        fromSetup: true,
+      });
     }
   };
 
@@ -249,23 +255,76 @@ export const HealthProfileSetupScreen: React.FC<
   // 🎉 Handle setup completion with success message
   const handleCompleteSetup = async () => {
     try {
+      // 🔒 CRITICAL FIX: Save all health profile data to secure storage
+      console.log('💾 Saving health profile data...', setupData);
+
+      // Save each section of the health profile
+      const sections = [
+        'demographics',
+        'goals',
+        'conditions',
+        'allergies',
+        'privacy',
+      ];
+
+      let savedSections = 0;
+      for (const section of sections) {
+        if (setupData[section]) {
+          console.log(`💾 Saving ${section} data:`, setupData[section]);
+          const result = await updateProfile(
+            section as keyof HealthProfile,
+            setupData[section]
+          );
+          if (result.error) {
+            console.error(`❌ Error saving ${section}:`, result.error);
+            throw new Error(`Failed to save ${section} data: ${result.error}`);
+          }
+          console.log(`✅ Successfully saved ${section} data`);
+          savedSections++;
+        } else {
+          console.log(`ℹ️ No data for ${section}, skipping...`);
+        }
+      }
+
+      console.log(
+        `✅ Setup completion: Saved ${savedSections} sections to secure storage`
+      );
+
+      // Refresh the profile to ensure UI is updated
+      await refreshProfile();
+
       // Clear saved progress since setup is complete
       await clearSavedProgress();
 
-      // Show success popup with Stack tab guidance
+      // Show success popup with Stack tab guidance and View/Edit Profile option
       Alert.alert(
         '🎉 Profile Setup Complete!',
-        'Great job! Your health profile is now set up.\n\nNext step: Optimize your stack by adding supplements or medications in the Stack tab to check for interactions.',
+        `Great job! Your health profile is now set up and saved securely (${savedSections} sections saved).\n\nNext step: Optimize your stack by adding supplements or medications in the Stack tab to check for interactions.`,
         [
           {
-            text: 'Got it!',
-            onPress: () => navigation.goBack(),
+            text: 'View/Edit Profile',
+            onPress: () =>
+              navigation.navigate('MainTabs', { screen: 'Profile' }),
+          },
+          {
+            text: 'Return to Home',
+            onPress: () => navigation.navigate('MainTabs', { screen: 'Home' }),
+            style: 'cancel',
           },
         ]
       );
     } catch (error) {
-      console.error('Error completing setup:', error);
-      navigation.goBack();
+      console.error('❌ Error completing setup:', error);
+      Alert.alert(
+        'Save Error',
+        'There was an issue saving your health profile. Please try again.',
+        [
+          {
+            text: 'OK',
+            onPress: () => navigation.goBack(),
+          },
+        ]
+      );
     }
   };
 
@@ -293,15 +352,24 @@ export const HealthProfileSetupScreen: React.FC<
     }
   };
 
-  // �🔄 Update step completion and auto-advance to next step
+  // Section key mapping for health profile schema
+  const sectionKeyMap: Record<string, string> = {
+    demographics: 'demographics',
+    health_goals: 'healthGoals',
+    health_conditions: 'healthConditions',
+    allergies: 'allergiesAndSensitivities',
+    privacy_consent: 'privacySettings',
+  };
+
+  // 🔄 Update step completion and auto-advance to next step, with auto-save to health profile
   const updateStepCompletion = useCallback(
-    (stepId: string, completed: boolean) => {
+    async (stepId: string, completed: boolean) => {
       setSteps(prevSteps => {
         const updatedSteps = prevSteps.map(step =>
           step.id === stepId ? { ...step, completed } : step
         );
 
-        // Auto-advance to next step when current step is completed
+        // 🔧 FIX: Auto-advance to next step when current step is completed
         if (completed) {
           const completedStepIndex = updatedSteps.findIndex(
             step => step.id === stepId
@@ -313,23 +381,106 @@ export const HealthProfileSetupScreen: React.FC<
             completedStepIndex === currentStep &&
             nextStepIndex < updatedSteps.length
           ) {
+            console.log(
+              `🚀 Auto-advancing from step ${completedStepIndex} to step ${nextStepIndex}`
+            );
             setCurrentStep(nextStepIndex);
+            // Save progress with new current step
+            saveProgress(updatedSteps, nextStepIndex);
+          } else {
+            // Save progress with current step
+            saveProgress(updatedSteps, currentStep);
           }
+        } else {
+          // Save progress with current step
+          saveProgress(updatedSteps, currentStep);
         }
 
         return updatedSteps;
       });
+
+      // Auto-save this section to health profile
+      const mappedKey = sectionKeyMap[stepId];
+      if (mappedKey && setupData[stepId]) {
+        try {
+          const result = await updateProfile(
+            mappedKey as any,
+            setupData[stepId]
+          );
+          if (result && result.error) {
+            Alert.alert(
+              'Save Error',
+              `There was an issue saving your ${mappedKey.replace(/([A-Z])/g, ' $1').toLowerCase()}. Please try again.`,
+              [
+                {
+                  text: 'Retry',
+                  onPress: () => updateStepCompletion(stepId, completed),
+                },
+                { text: 'Cancel', style: 'cancel' },
+              ]
+            );
+          }
+        } catch (error) {
+          Alert.alert(
+            'Save Error',
+            `There was an issue saving your ${mappedKey.replace(/([A-Z])/g, ' $1').toLowerCase()}. Please try again.`,
+            [
+              {
+                text: 'Retry',
+                onPress: () => updateStepCompletion(stepId, completed),
+              },
+              { text: 'Cancel', style: 'cancel' },
+            ]
+          );
+        }
+      }
     },
-    [currentStep]
+    [currentStep, setupData, updateProfile]
   );
 
-  // 💾 Auto-save form data
-  const updateFormData = useCallback((stepId: string, data: unknown) => {
-    setSetupData(prev => ({
-      ...prev,
-      [stepId]: data,
-    }));
-  }, []);
+  // 💾 Auto-save form data (and immediately persist to health profile)
+  const updateFormData = useCallback(
+    (stepId: string, data: unknown) => {
+      setSetupData(prev => {
+        const updated = { ...prev, [stepId]: data };
+        // Auto-save to health profile as soon as data is updated
+        const mappedKey = sectionKeyMap[stepId];
+        if (mappedKey && data) {
+          updateProfile(mappedKey as any, data)
+            .then(result => {
+              if (result && result.error) {
+                Alert.alert(
+                  'Save Error',
+                  `There was an issue saving your ${mappedKey.replace(/([A-Z])/g, ' $1').toLowerCase()}. Please try again.`,
+                  [
+                    {
+                      text: 'Retry',
+                      onPress: () => updateFormData(stepId, data),
+                    },
+                    { text: 'Cancel', style: 'cancel' },
+                  ]
+                );
+              }
+            })
+            .catch(() => {
+              Alert.alert(
+                'Save Error',
+                `There was an issue saving your ${mappedKey.replace(/([A-Z])/g, ' $1').toLowerCase()}. Please try again.`,
+                [
+                  {
+                    text: 'Retry',
+                    onPress: () => updateFormData(stepId, data),
+                  },
+                  { text: 'Cancel', style: 'cancel' },
+                ]
+              );
+            });
+        }
+        return updated;
+      });
+    },
+    [updateProfile]
+  );
 
   // 🪶 LIGHT: Minimal render function
   const renderStepItem = (step: ProfileSetupStep, index: number) => {
@@ -407,11 +558,23 @@ export const HealthProfileSetupScreen: React.FC<
         <TouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backButton}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
         >
           <Ionicons name="arrow-back" size={24} color={COLORS.textPrimary} />
         </TouchableOpacity>
-        <Text style={styles.title}>Health Profile</Text>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <Text
+          style={styles.title}
+          accessibilityRole="header"
+          accessibilityLabel="Health Profile Setup"
+        >
+          Health Profile
+        </Text>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          accessibilityRole="button"
+          accessibilityLabel="Skip setup and return"
+        >
           <Text style={styles.skipText}>Skip</Text>
         </TouchableOpacity>
       </View>
@@ -432,13 +595,18 @@ export const HealthProfileSetupScreen: React.FC<
           />
         </View>
         <Text style={styles.progressText}>
-          {Math.round(getProgressPercentage())}% Complete
+          {Math.round(completeness)}% Complete
         </Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Hero Section */}
-        <View style={styles.hero}>
+        <View
+          style={styles.hero}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel="Personalized Safety"
+        >
           <Ionicons name="shield-checkmark" size={40} color={COLORS.primary} />
           <Text style={styles.heroTitle}>Personalized Safety</Text>
           <Text style={styles.heroSubtitle}>
@@ -477,10 +645,12 @@ export const HealthProfileSetupScreen: React.FC<
 
       {/* Action Buttons */}
       <View style={styles.footer}>
-        {getProgressPercentage() === 100 ? (
+        {completeness === 100 ? (
           <TouchableOpacity
             style={styles.completeButton}
             onPress={handleCompleteSetup}
+            accessibilityRole="button"
+            accessibilityLabel="Complete profile setup"
           >
             <Text style={styles.completeButtonText}>Complete Setup</Text>
             <Ionicons name="arrow-forward" size={20} color={COLORS.white} />
@@ -489,6 +659,8 @@ export const HealthProfileSetupScreen: React.FC<
           <TouchableOpacity
             style={styles.saveProgressButton}
             onPress={handleSaveProgress}
+            accessibilityRole="button"
+            accessibilityLabel="Save progress and return later"
           >
             <Ionicons
               name="bookmark-outline"
@@ -505,6 +677,7 @@ export const HealthProfileSetupScreen: React.FC<
         onClose={() => setShowConsentModal(false)}
         onConsentsGranted={handleConsentGranted}
         title="Privacy Settings"
+        accessibilityLabel="Privacy and consent modal"
       />
     </SafeAreaView>
   );

@@ -1,13 +1,22 @@
 // src/navigation/AppNavigator.tsx
 // This file defines the main application navigator, which includes both authentication and main app screens.
 
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useCallback, useState } from 'react';
+import {
+  NavigationContainer,
+  NavigationState,
+  PartialState,
+} from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
 import { AuthNavigator } from './AuthNavigator';
+import { LoadingScreen } from '../components/common/LoadingScreen';
+import {
+  navigationStateManager,
+  NavigationStateUtils,
+} from '../services/navigation/navigationStateManager';
 import { WelcomeScreen } from '../screens/auth/WelcomeScreen';
 import { HomeScreen } from '../screens/home/HomeScreen';
 import { ScanScreen } from '../screens/scan/ScanScreen';
@@ -91,9 +100,59 @@ const MainTabs = () => {
 // Root Navigator that switches between Auth and Main based on authentication state
 export const AppNavigator = () => {
   const { user, loading } = useAuth();
+  const [isReady, setIsReady] = useState(false);
+  const [initialState, setInitialState] = useState<
+    NavigationState | PartialState<NavigationState> | undefined
+  >();
 
   // Create a ref to track if this is the first render
   const isFirstRender = React.useRef(true);
+
+  // Initialize navigation state manager and restore state
+  React.useEffect(() => {
+    const initializeNavigation = async () => {
+      try {
+        await navigationStateManager.initialize(user?.id);
+
+        // Only restore navigation state for authenticated users (not guests)
+        // This ensures guest users always start at the main tabs
+        if (user && user.email && !user.is_anonymous) {
+          const restoredState =
+            await navigationStateManager.restoreNavigationState();
+          if (
+            restoredState &&
+            NavigationStateUtils.isValidNavigationState(restoredState)
+          ) {
+            setInitialState(restoredState);
+          }
+        } else if (user && user.is_anonymous) {
+          // For guest users, clear any existing navigation state
+          // and ensure they start fresh at main tabs
+          await navigationStateManager.clearNavigationState();
+          setInitialState(undefined);
+        }
+      } catch (error) {
+        console.error('Failed to initialize navigation:', error);
+      } finally {
+        setIsReady(true);
+      }
+    };
+
+    initializeNavigation();
+  }, [user?.id]);
+
+  // Handle navigation state changes
+  const onStateChange = useCallback(
+    (state: NavigationState | undefined) => {
+      if (state && user) {
+        // Save navigation state for logged-in users
+        const sanitizedState =
+          NavigationStateUtils.sanitizeNavigationState(state);
+        navigationStateManager.saveNavigationState(sanitizedState);
+      }
+    },
+    [user]
+  );
 
   // Use this effect to handle the navigation reset only when auth state changes
   React.useEffect(() => {
@@ -105,15 +164,30 @@ export const AppNavigator = () => {
 
     // Log the auth state change for debugging
     console.log('Auth state changed, user:', user ? 'logged in' : 'logged out');
+
+    // Clear navigation state when user logs out or when guest user signs in
+    if (!user) {
+      navigationStateManager.clearNavigationState();
+      setInitialState(undefined);
+    } else if (user.is_anonymous) {
+      // For guest users, always clear navigation state to ensure fresh start
+      navigationStateManager.clearNavigationState();
+      setInitialState(undefined);
+      console.log(
+        '🎭 Guest user detected, clearing navigation state for fresh start'
+      );
+    }
   }, [user]);
 
-  if (loading) {
-    // You could return a loading screen here
-    return null;
+  if (loading || !isReady) {
+    return <LoadingScreen message="Initializing..." variant="auth" />;
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer
+      initialState={initialState}
+      onStateChange={onStateChange}
+    >
       {user ? (
         <Stack.Navigator>
           <Stack.Screen
@@ -127,7 +201,6 @@ export const AppNavigator = () => {
             options={{
               headerShown: true,
               title: 'Search Products',
-              headerBackTitleVisible: false,
             }}
           />
           <Stack.Screen
@@ -136,7 +209,6 @@ export const AppNavigator = () => {
             options={{
               headerShown: true,
               title: 'Scan Label',
-              headerBackTitleVisible: false,
             }}
           />
           <Stack.Screen
@@ -145,7 +217,6 @@ export const AppNavigator = () => {
             options={{
               headerShown: false,
               title: 'Submit Product',
-              headerBackTitleVisible: false,
             }}
           />
           <Stack.Screen
@@ -154,7 +225,6 @@ export const AppNavigator = () => {
             options={{
               headerShown: true,
               title: 'Product Analysis',
-              headerBackTitleVisible: false,
             }}
           />
           <Stack.Screen
