@@ -13,7 +13,7 @@ import type {
   StackInteractionResult,
   NutrientWarning,
 } from '../../types';
-import type { HealthProfile } from '../../hooks/useHealthProfile';
+import type { UserProfile } from '../../types/healthProfile';
 import type { CitationSource } from '../../components/compliance';
 import {
   FDA_COMPLIANCE,
@@ -73,7 +73,7 @@ export class InteractionService {
   async analyzeProductWithStackEnhanced(
     product: Product,
     userStack: UserStack[],
-    healthProfile?: HealthProfile,
+    healthProfile?: UserProfile,
     userId?: string
   ): Promise<{
     legacy: StackInteractionResult;
@@ -484,7 +484,7 @@ export class InteractionService {
    * Convert health profile to user context
    */
   private convertHealthProfileToUserContext(
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): UserInteractionContext | undefined {
     if (!healthProfile) return undefined;
 
@@ -691,7 +691,7 @@ export class InteractionService {
   async checkInteractionsWithCompliance(
     product: Product,
     stack: UserStack[],
-    healthProfile?: HealthProfile
+    healthProfile?: UserProfile
   ): Promise<
     StackInteractionResult & {
       fdaCompliance: { disclaimer: string; sources: CitationSource[] };

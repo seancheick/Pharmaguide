@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   Alert,
   Modal,
+  TextInput,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
@@ -116,7 +117,7 @@ export const NewHealthProfileSetupScreen: React.FC = () => {
       await newHealthProfileService.updateHealthInformation(user.id, {
         demographics: {
           ...demographics,
-          displayName: user.email?.split('@')[0] || 'User',
+          displayName: demographics.displayName || user.email?.split('@')[0] || 'User',
         },
         healthGoals: selectedHealthGoals,
         healthConditions: selectedConditions,
@@ -192,12 +193,18 @@ export const NewHealthProfileSetupScreen: React.FC = () => {
   // Success Modal Actions
   const handleGoToStack = useCallback(() => {
     setShowSuccessModal(false);
-    navigation.navigate('Stack' as never);
+    // Navigate to MainTabs with Stack tab selected
+    navigation.navigate('MainTabs', {
+      screen: 'Stack',
+    } as never);
   }, [navigation]);
 
   const handleGoHome = useCallback(() => {
     setShowSuccessModal(false);
-    navigation.navigate('Home' as never);
+    // Navigate to MainTabs with Home tab selected
+    navigation.navigate('MainTabs', {
+      screen: 'Home',
+    } as never);
   }, [navigation]);
 
   // Render Step 1: Privacy & Consent
@@ -316,6 +323,19 @@ export const NewHealthProfileSetupScreen: React.FC = () => {
       {/* Demographics */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Demographics</Text>
+        
+        <Text style={styles.fieldLabel}>What would you like me to call you? (optional)</Text>
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            placeholder="Enter your preferred name"
+            placeholderTextColor={COLORS.textSecondary}
+            value={demographics.displayName || ''}
+            onChangeText={(text) => setDemographics(prev => ({ ...prev, displayName: text.trim() }))}
+            returnKeyType="next"
+            maxLength={50}
+          />
+        </View>
         
         <Text style={styles.fieldLabel}>Age Range *</Text>
         <View style={styles.chipContainer}>
@@ -668,5 +688,18 @@ const styles = StyleSheet.create({
     fontSize: TYPOGRAPHY.sizes.md,
     fontWeight: TYPOGRAPHY.weights.semibold,
     color: COLORS.textPrimary,
+  },
+  inputContainer: {
+    marginBottom: SPACING.md,
+  },
+  textInput: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.md,
+    fontSize: TYPOGRAPHY.sizes.base,
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.surface,
   },
 });

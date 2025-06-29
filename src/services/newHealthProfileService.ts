@@ -2,7 +2,9 @@
 // Clean, simple health profile service for persistence
 
 import { secureStorage } from './storage/secureStorage';
+import { localHealthProfileService } from './health/localHealthProfileService';
 import type { NewHealthProfile, PrivacyConsent, Demographics, HealthGoal, HealthCondition, Allergy } from '../types/newHealthProfile';
+import type { UserProfile } from '../types/healthProfile';
 
 class NewHealthProfileService {
   private readonly STORAGE_KEY = 'new_health_profile';
@@ -89,7 +91,88 @@ class NewHealthProfileService {
       allergies: Allergy[];
     }
   ): Promise<NewHealthProfile> {
-    return this.saveProfile(userId, data);
+    // Save to new health profile system
+    const profile = await this.saveProfile(userId, data);
+    
+    // Also update the old health profile system for backward compatibility
+    await this.syncToOldHealthProfile(userId, data);
+    
+    return profile;
+  }
+
+  /**
+   * Sync new health profile data to old health profile system for backward compatibility
+   */
+  private async syncToOldHealthProfile(
+    userId: string,
+    data: {
+      demographics: Demographics;
+      healthGoals: HealthGoal[];
+      healthConditions: HealthCondition[];
+      allergies: Allergy[];
+    }
+  ): Promise<void> {
+    try {
+      const now = new Date().toISOString();
+      
+      // Transform new data to old format
+      const oldFormatDemographics = {
+        ageRange: data.demographics.ageRange as any,
+        biologicalSex: data.demographics.biologicalSex as any,
+        displayName: data.demographics.displayName,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const oldFormatHealthGoals = {
+        primary: data.healthGoals[0]?.id as any || undefined,
+        secondary: data.healthGoals[1]?.id as any || undefined,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const oldFormatHealthConditions = {
+        conditions: data.healthConditions.map(condition => ({
+          id: condition.id,
+          name: condition.name,
+          category: condition.category as any,
+          severity: 'mild' as const,
+          diagnosed: true,
+          managedWith: 'lifestyle' as const,
+        })),
+        consentGiven: true,
+        lastUpdated: now,
+      };
+
+      const oldFormatAllergies = {
+        allergies: data.allergies.map(allergy => ({
+          id: allergy.id,
+          name: allergy.name,
+          type: allergy.type as any,
+          severity: 'mild' as const,
+          confirmed: true,
+        })),
+        consentGiven: true,
+        lastUpdated: now,
+      };
+
+      // Update old health profile service
+      await localHealthProfileService.updateDemographics(userId, oldFormatDemographics);
+      if (oldFormatHealthGoals.primary) {
+        await localHealthProfileService.updateHealthGoals(userId, oldFormatHealthGoals);
+      }
+      if (oldFormatHealthConditions.conditions.length > 0) {
+        await localHealthProfileService.updateHealthConditions(userId, oldFormatHealthConditions);
+      }
+      if (oldFormatAllergies.allergies.length > 0) {
+        await localHealthProfileService.updateAllergiesAndSensitivities(userId, oldFormatAllergies);
+      }
+
+      console.log('✅ Synced new health profile to old format for backward compatibility');
+    } catch (error) {
+      console.error('❌ Failed to sync to old health profile format:', error);
+      // Don't throw error - this is just for backward compatibility
+    }
   }
 
   /**

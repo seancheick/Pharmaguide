@@ -3,6 +3,8 @@
 // Authentication & User Management
 export { useAuth } from './useAuth';
 export { useAuthMode } from './useAuthMode';
+export { useNewHealthProfile } from './useNewHealthProfile';
+// Legacy exports for backward compatibility
 export { useHealthProfile } from './useHealthProfile';
 export { useSetupProgress } from './useSetupProgress';
 
