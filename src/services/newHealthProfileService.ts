@@ -46,7 +46,15 @@ class NewHealthProfileService {
         updatedProfile.id
       );
 
-      console.log('✅ Health profile saved successfully');
+      console.log('✅ Health profile saved successfully:', {
+        id: updatedProfile.id,
+        isComplete: updatedProfile.isComplete,
+        hasPrivacy: !!updatedProfile.privacy,
+        hasDemographics: !!updatedProfile.demographics,
+        ageRange: updatedProfile.demographics?.ageRange,
+        biologicalSex: updatedProfile.demographics?.biologicalSex,
+      });
+      
       return updatedProfile;
     } catch (error) {
       console.error('❌ Failed to save health profile:', error);
@@ -62,10 +70,21 @@ class NewHealthProfileService {
       const profiles = await secureStorage.getHealthData(userId, this.STORAGE_KEY);
       
       if (profiles.length === 0) {
+        console.log('🔍 No health profile found for user:', userId.substring(0, 8) + '...');
         return null;
       }
 
-      return profiles[0] as NewHealthProfile;
+      const profile = profiles[0] as NewHealthProfile;
+      console.log('🔍 Health profile retrieved:', {
+        id: profile.id,
+        isComplete: profile.isComplete,
+        hasPrivacy: !!profile.privacy,
+        hasDemographics: !!profile.demographics,
+        ageRange: profile.demographics?.ageRange,
+        biologicalSex: profile.demographics?.biologicalSex,
+      });
+      
+      return profile;
     } catch (error) {
       console.error('❌ Failed to get health profile:', error);
       return null;
@@ -94,8 +113,14 @@ class NewHealthProfileService {
     // Save to new health profile system
     const profile = await this.saveProfile(userId, data);
     
-    // Also update the old health profile system for backward compatibility
-    await this.syncToOldHealthProfile(userId, data);
+    // Also sync to old health profile system for backward compatibility
+    try {
+      await this.syncToOldHealthProfile(userId, data);
+      console.log('✅ Successfully synced to old health profile format');
+    } catch (error) {
+      console.warn('⚠️ Failed to sync to old health profile format (non-critical):', error);
+      // Don't throw error - this is just for backward compatibility
+    }
     
     return profile;
   }
@@ -115,63 +140,57 @@ class NewHealthProfileService {
     try {
       const now = new Date().toISOString();
       
-      // Transform new data to old format
-      const oldFormatDemographics = {
-        ageRange: data.demographics.ageRange as any,
-        biologicalSex: data.demographics.biologicalSex as any,
-        displayName: data.demographics.displayName,
-        createdAt: now,
-        updatedAt: now,
+      // Get existing old profile or create new one
+      const existingProfile = await localHealthProfileService.getHealthProfile(userId);
+      
+      // Transform new data to old format and merge with existing
+      const oldFormatProfile = {
+        ...existingProfile,
+        demographics: {
+          ageRange: data.demographics.ageRange as any,
+          biologicalSex: data.demographics.biologicalSex as any,
+          displayName: data.demographics.displayName,
+          createdAt: existingProfile?.demographics?.createdAt || now,
+          updatedAt: now,
+        },
+        healthGoals: data.healthGoals.length > 0 ? {
+          primary: data.healthGoals[0]?.id as any,
+          secondary: data.healthGoals[1]?.id as any || undefined,
+          createdAt: existingProfile?.healthGoals?.createdAt || now,
+          updatedAt: now,
+        } : existingProfile?.healthGoals,
+        healthConditions: data.healthConditions.length > 0 ? {
+          conditions: data.healthConditions.map(condition => ({
+            id: condition.id,
+            name: condition.name,
+            category: condition.category as any,
+            severity: 'mild' as const,
+            diagnosed: true,
+            managedWith: 'lifestyle' as const,
+          })),
+          consentGiven: true,
+          lastUpdated: now,
+        } : existingProfile?.healthConditions,
+        allergiesAndSensitivities: data.allergies.length > 0 ? {
+          allergies: data.allergies.map(allergy => ({
+            id: allergy.id,
+            name: allergy.name,
+            type: allergy.type as any,
+            severity: 'mild' as const,
+            confirmed: true,
+          })),
+          consentGiven: true,
+          lastUpdated: now,
+        } : existingProfile?.allergiesAndSensitivities,
       };
 
-      const oldFormatHealthGoals = {
-        primary: data.healthGoals[0]?.id as any || undefined,
-        secondary: data.healthGoals[1]?.id as any || undefined,
-        createdAt: now,
-        updatedAt: now,
-      };
-
-      const oldFormatHealthConditions = {
-        conditions: data.healthConditions.map(condition => ({
-          id: condition.id,
-          name: condition.name,
-          category: condition.category as any,
-          severity: 'mild' as const,
-          diagnosed: true,
-          managedWith: 'lifestyle' as const,
-        })),
-        consentGiven: true,
-        lastUpdated: now,
-      };
-
-      const oldFormatAllergies = {
-        allergies: data.allergies.map(allergy => ({
-          id: allergy.id,
-          name: allergy.name,
-          type: allergy.type as any,
-          severity: 'mild' as const,
-          confirmed: true,
-        })),
-        consentGiven: true,
-        lastUpdated: now,
-      };
-
-      // Update old health profile service
-      await localHealthProfileService.updateDemographics(userId, oldFormatDemographics);
-      if (oldFormatHealthGoals.primary) {
-        await localHealthProfileService.updateHealthGoals(userId, oldFormatHealthGoals);
-      }
-      if (oldFormatHealthConditions.conditions.length > 0) {
-        await localHealthProfileService.updateHealthConditions(userId, oldFormatHealthConditions);
-      }
-      if (oldFormatAllergies.allergies.length > 0) {
-        await localHealthProfileService.updateAllergiesAndSensitivities(userId, oldFormatAllergies);
-      }
+      // Update old health profile service with complete profile
+      await localHealthProfileService.saveHealthProfile(userId, oldFormatProfile);
 
       console.log('✅ Synced new health profile to old format for backward compatibility');
     } catch (error) {
       console.error('❌ Failed to sync to old health profile format:', error);
-      // Don't throw error - this is just for backward compatibility
+      throw error; // Let parent handle
     }
   }
 

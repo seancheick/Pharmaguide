@@ -30,6 +30,9 @@ export const useNewHealthProfile = () => {
       console.log('✅ Health profile loaded:', {
         hasProfile: !!profileData,
         isComplete: profileData?.isComplete,
+        completionPercentage: profileData ? Math.round(((profileData.privacy?.dataStorage ? 1 : 0) + (profileData.demographics?.ageRange && profileData.demographics?.biologicalSex ? 1 : 0)) / 2 * 100) : 0,
+        demographics: profileData?.demographics ? 'present' : 'missing',
+        privacy: profileData?.privacy ? 'present' : 'missing',
         userId: user.id.substring(0, 8) + '...',
       });
     } catch (err) {
@@ -90,5 +93,16 @@ export const useNewHealthProfile = () => {
     loadProfile,
     refreshProfile,
     resetError: () => setError(null),
+    // Force immediate refresh without loading state
+    forceRefresh: useCallback(async () => {
+      if (!user?.id) return;
+      try {
+        const profileData = await newHealthProfileService.getProfile(user.id);
+        setProfile(profileData);
+        console.log('🔄 Profile force refreshed:', !!profileData);
+      } catch (err) {
+        console.error('❌ Error force refreshing profile:', err);
+      }
+    }, [user?.id]),
   };
 };

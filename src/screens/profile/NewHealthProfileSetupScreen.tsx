@@ -16,6 +16,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
+import { useNewHealthProfile } from '../../hooks/useNewHealthProfile';
 import { newHealthProfileService } from '../../services/newHealthProfileService';
 import type {
   NewHealthProfile,
@@ -40,6 +41,7 @@ type SetupStep = 'privacy' | 'health-info' | 'complete';
 export const NewHealthProfileSetupScreen: React.FC = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const { forceRefresh } = useNewHealthProfile();
   
   // State
   const [currentStep, setCurrentStep] = useState<SetupStep>('privacy');
@@ -124,6 +126,10 @@ export const NewHealthProfileSetupScreen: React.FC = () => {
         allergies: selectedAllergies,
       });
 
+      // Force refresh profile to update completion status
+      console.log('🔄 Refreshing profile after save...');
+      await forceRefresh();
+      
       setShowSuccessModal(true);
     } catch (error) {
       console.error('Failed to save health information:', error);
