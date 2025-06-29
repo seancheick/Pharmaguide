@@ -1,9 +1,9 @@
 // src/utils/performanceValidator.ts
 // Performance validation and testing utilities
 
-import { bundleAnalyzer } from './bundleAnalyzer';
 import { performanceStorage } from '../services/storage/performanceStorageWrapper';
 import { optimizedMMKVStorage } from '../services/storage/optimizedMMKVStorage';
+import { bundleAnalyzer } from './bundleAnalyzer';
 
 interface PerformanceMetrics {
   bundleSize: number;

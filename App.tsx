@@ -57,8 +57,16 @@ export default function App() {
         await networkService.initialize();
         await secureStorage.initialize();
 
+        // Clean up invalid storage entries
+        const { initializeStorageCleanup } = await import(
+          './src/utils/cleanupStorage'
+        );
+        await initializeStorageCleanup();
+
         const totalTime = Date.now() - startTime;
-        console.log(`✅ App initialization completed in ${totalTime}ms`);
+        console.log(
+          `✅ App initialization completed in ${totalTime}ms (performance optimized)`
+        );
       } catch (error) {
         console.error('❌ Failed to initialize core services:', error);
         // App can still function with limited capabilities

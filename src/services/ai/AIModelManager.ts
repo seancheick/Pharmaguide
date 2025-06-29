@@ -286,7 +286,7 @@ export class AIModelManager {
   /**
    * Get all available models with their current status
    */
-  getAvailableModels(): Array<{
+  getAvailableModels(): {
     id: string;
     name: string;
     provider: string;
@@ -294,7 +294,7 @@ export class AIModelManager {
     reliability: number;
     averageLatency: number;
     capabilities: string[];
-  }> {
+  }[] {
     return Array.from(this.models.values()).map(model => ({
       id: model.id,
       name: model.name,

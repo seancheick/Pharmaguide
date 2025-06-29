@@ -1,4 +1,14 @@
 // src/services/performance/index.ts
+// Initialize all performance services
+import { logger } from '../monitoring/logger';
+import { imageCacheService } from './imageCacheService';
+import { networkCacheService } from './networkCacheService';
+import { bundleOptimizationService } from './bundleOptimizationService';
+import { memoryLeakPrevention } from './memoryLeakPrevention';
+import { enhancedImageOptimization } from './enhancedImageOptimization';
+import { requestDeduplicator } from './requestDeduplicator';
+import { enhancedMemoryMonitor } from './enhancedMemoryMonitor';
+
 export { imageCacheService } from './imageCacheService';
 export { networkCacheService } from './networkCacheService';
 export { bundleOptimizationService } from './bundleOptimizationService';
@@ -25,16 +35,6 @@ export type {
   LeakDetectionResult,
   TrackedResource,
 } from './memoryLeakPrevention';
-
-// Initialize all performance services
-import { imageCacheService } from './imageCacheService';
-import { networkCacheService } from './networkCacheService';
-import { bundleOptimizationService } from './bundleOptimizationService';
-import { memoryLeakPrevention } from './memoryLeakPrevention';
-import { enhancedImageOptimization } from './enhancedImageOptimization';
-import { requestDeduplicator } from './requestDeduplicator';
-import { enhancedMemoryMonitor } from './enhancedMemoryMonitor';
-import { logger } from '../monitoring/logger';
 
 /**
  * Initialize all performance optimization services

@@ -37,6 +37,11 @@ export const UnifiedGamificationCard: React.FC<
   onUpgradePress,
   showUpgradePrompt = false,
 }) => {
+  // Early return if gameStats is not provided
+  if (!gameStats) {
+    return null;
+  }
+
   // Animation refs
   const progressAnimatedValue = useRef(new Animated.Value(0)).current;
 
@@ -123,11 +128,6 @@ export const UnifiedGamificationCard: React.FC<
   const scoreLabel = getScoreLabel(stackHealthScore);
   const progress = getProgressToNextLevel();
   const pointsToNext = getPointsToNextLevel();
-
-  // Safety check for gameStats
-  if (!gameStats) {
-    return null;
-  }
 
   // Animate progress when it changes
   useEffect(() => {

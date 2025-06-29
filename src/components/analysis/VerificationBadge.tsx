@@ -107,12 +107,12 @@ export const VerificationBadge: React.FC<VerificationBadgeProps> = ({
  * Multiple verification badges for complex analyses
  */
 interface VerificationBadgeGroupProps {
-  badges: Array<{
+  badges: {
     level: VerificationLevel;
     confidence?: ConfidenceLevel;
     evidenceGrade?: EvidenceGrade;
     source?: string;
-  }>;
+  }[];
   onBadgePress?: (index: number) => void;
   compact?: boolean;
 }

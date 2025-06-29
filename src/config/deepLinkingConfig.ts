@@ -97,31 +97,7 @@ export const pharmaGuideDeepLinkConfig: DeepLinkConfig = {
 
     healthProfile: {
       path: '/profile/health',
-      screen: 'HealthProfileSetup',
-      requiresAuth: true,
-    },
-
-    demographics: {
-      path: '/profile/demographics',
-      screen: 'Demographics',
-      requiresAuth: true,
-    },
-
-    healthGoals: {
-      path: '/profile/goals',
-      screen: 'HealthGoals',
-      requiresAuth: true,
-    },
-
-    healthConditions: {
-      path: '/profile/conditions',
-      screen: 'HealthConditions',
-      requiresAuth: true,
-    },
-
-    allergies: {
-      path: '/profile/allergies',
-      screen: 'Allergies',
+      screen: 'NewHealthProfileSetup',
       requiresAuth: true,
     },
 

@@ -45,7 +45,7 @@ class EnhancedMemoryMonitor {
 
   private monitoringInterval: NodeJS.Timeout | null = null;
   private pressureHistory: MemoryPressureLevel[] = [];
-  private listeners: Array<(pressure: MemoryPressureLevel) => void> = [];
+  private listeners: ((pressure: MemoryPressureLevel) => void)[] = [];
   private isMonitoring = false;
 
   /**

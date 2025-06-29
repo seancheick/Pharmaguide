@@ -1,4 +1,9 @@
 // src/services/accessibility/index.ts
+// Initialize accessibility services
+import { logger } from '../monitoring/logger';
+import { accessibilityService } from './accessibilityService';
+import { keyboardNavigationService } from './keyboardNavigationService';
+
 export { accessibilityService } from './accessibilityService';
 export { voiceNavigationService } from './voiceNavigationService';
 export { keyboardNavigationService } from './keyboardNavigationService';
@@ -13,11 +18,6 @@ export type {
   KeyboardNavigationConfig,
   FocusTrap,
 } from './keyboardNavigationService';
-
-// Initialize accessibility services
-import { accessibilityService } from './accessibilityService';
-import { keyboardNavigationService } from './keyboardNavigationService';
-import { logger } from '../monitoring/logger';
 
 /**
  * Initialize all accessibility services

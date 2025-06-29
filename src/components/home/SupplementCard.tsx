@@ -32,12 +32,14 @@ interface SupplementCardProps {
   };
   onHelpfulClick?: (supplement: any, isHelpful: boolean) => void;
   onPress?: () => void;
+  onLongPress?: () => void;
 }
 
 export const SupplementCard: React.FC<SupplementCardProps> = ({
   supplement,
   onHelpfulClick,
   onPress,
+  onLongPress,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const shadowAnim = useRef(new Animated.Value(0)).current;
@@ -178,6 +180,7 @@ export const SupplementCard: React.FC<SupplementCardProps> = ({
   return (
     <TouchableOpacity
       onPress={onPress}
+      onLongPress={onLongPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       activeOpacity={1}

@@ -31,6 +31,11 @@ export const STORAGE_KEYS = {
   APP_INITIALIZED: '@pharmaguide_app_initialized',
   DAILY_CHALLENGE_STATUS: '@pharmaguide_daily_challenge_status',
 
+  // Health Profile Setup
+  SETUP_PROGRESS: 'health_profile_setup_progress',
+  SETUP_DATA: 'health_profile_setup_data',
+  CONSENTS: 'health_profile_consents',
+
   // Search
   RECENT_SEARCHES: '@pharmaguide_recent_searches',
 } as const;

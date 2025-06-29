@@ -9,17 +9,17 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import type { ScanScreenProps } from '../../types/navigation';
 import { Ionicons } from '@expo/vector-icons';
+import type { ScanScreenProps } from '../../types/navigation';
 import { Button, AnimatedTouchable } from '../../components/common';
 import { useToast } from '../../hooks/useToast';
 import { EmptyState } from '../../components/common/EmptyState';
-import { BarcodeScanner } from './BarcodeScanner';
-import { ProductAnalysisResults } from './ProductAnalysisResults';
 import { productService } from '../../services/products';
 import { useStackStore } from '../../stores/stackStore';
 import type { Product, ProductAnalysis } from '../../types';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { ProductAnalysisResults } from './ProductAnalysisResults';
+import { BarcodeScanner } from './BarcodeScanner';
 
 type ScanScreenState = 'idle' | 'scanning' | 'processing' | 'results';
 

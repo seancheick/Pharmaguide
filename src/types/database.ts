@@ -43,7 +43,7 @@ export interface DatabaseUserProfile {
   avatar_url: string | null;
   bio: string | null;
   date_of_birth: string | null; // date
-  gender: string | null;
+  gender: string | null; // Matches Supabase schema
   height_cm: number | null;
   weight_kg: number | null;
   activity_level: string | null;

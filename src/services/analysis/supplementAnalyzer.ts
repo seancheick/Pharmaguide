@@ -1,12 +1,12 @@
 // src/services/analysis/supplementAnalyzer.ts
 // Enhanced Supplement Analysis System with Clinical Focus
 
+import type { Product, UserStack, UserProfile } from '../../types';
 import {
   IngredientAnalyzer,
   DemographicFactors,
   IngredientAnalysisResult,
 } from './ingredientAnalyzer';
-import type { Product, UserStack, UserProfile } from '../../types';
 
 export interface EnhancedSupplementAnalysis {
   // Overall Assessment

@@ -6,11 +6,11 @@ import {
   ruleBasedEngine,
   RuleBasedResult,
 } from '../interactions/ruleBasedEngine';
-import { AICache } from './AICache';
-import { aiService } from './aiService';
 import { costTracker } from '../analytics/costTracker';
 import { networkService } from '../network/networkService';
 import type { Product, UserStack, UserProfile } from '../../types';
+import { aiService } from './aiService';
+import { AICache } from './AICache';
 
 export interface ThreeTierResult {
   result: any;

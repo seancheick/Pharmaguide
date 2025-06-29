@@ -26,6 +26,28 @@ module.exports = {
     },
   },
   rules: {
+    // Naming conventions
+    '@typescript-eslint/naming-convention': [
+      'warn',
+      {
+        selector: 'interface',
+        format: ['PascalCase'],
+        prefix: ['I'],
+      },
+      {
+        selector: 'typeAlias',
+        format: ['PascalCase'],
+      },
+      {
+        selector: 'function',
+        format: ['camelCase'],
+      },
+      {
+        selector: 'variable',
+        format: ['camelCase', 'UPPER_CASE'],
+      },
+    ],
+
     // Start with warnings instead of errors to not break existing code
     '@typescript-eslint/no-unused-vars': 'warn',
     '@typescript-eslint/no-explicit-any': 'warn',
@@ -49,11 +71,16 @@ module.exports = {
     'react-native/no-raw-text': 'off', // Allow raw text for now
 
     // General code quality - warnings to start
-    'no-console': 'off', // Allow console logs in development
-    'no-debugger': 'warn',
+    'no-console': 'warn', // Changed from 'off' to 'warn' for production readiness
+    'no-debugger': 'error', // Changed from 'warn' to 'error'
     'no-unused-vars': 'off', // Using TypeScript version
-    'prefer-const': 'warn',
-    'no-var': 'warn',
+    'prefer-const': 'error', // Changed from 'warn' to 'error'
+    'no-var': 'error', // Changed from 'warn' to 'error'
+    'no-alert': 'error',
+    'no-eval': 'error',
+    'no-implied-eval': 'error',
+    'no-new-func': 'error',
+    'no-script-url': 'error',
 
     // Import rules
     'import/order': [

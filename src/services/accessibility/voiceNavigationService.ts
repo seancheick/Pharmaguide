@@ -442,7 +442,7 @@ class VoiceNavigationService {
   /**
    * Get available commands
    */
-  getAvailableCommands(): Array<{ id: string; command: VoiceCommand }> {
+  getAvailableCommands(): { id: string; command: VoiceCommand }[] {
     return Array.from(this.commands.entries()).map(([id, command]) => ({ id, command }));
   }
 

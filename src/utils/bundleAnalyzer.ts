@@ -7,7 +7,7 @@ interface BundleStats {
   assetsSize: number;
   moduleCount: number;
   chunkCount: number;
-  largestModules: Array<{ name: string; size: number }>;
+  largestModules: { name: string; size: number }[];
   recommendations: string[];
 }
 
@@ -178,13 +178,13 @@ export class BundleAnalyzer {
   /**
    * Generate optimization roadmap
    */
-  generateOptimizationRoadmap(): Array<{
+  generateOptimizationRoadmap(): {
     phase: string;
     optimizations: string[];
     estimatedSavings: number;
     effort: string;
     priority: 'high' | 'medium' | 'low';
-  }> {
+  }[] {
     return [
       {
         phase: 'Phase 1: Quick Wins',
@@ -244,7 +244,7 @@ export class BundleAnalyzer {
   /**
    * Get bundle size trends
    */
-  getBundleSizeTrends(): Array<{ version: string; size: number; date: string }> {
+  getBundleSizeTrends(): { version: string; size: number; date: string }[] {
     try {
       return JSON.parse(localStorage.getItem('bundleSizeHistory') || '[]');
     } catch (error) {

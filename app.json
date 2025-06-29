@@ -29,7 +29,13 @@
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "assets/images/**/*",
+      "assets/icon.png",
+      "assets/splash.png",
+      "assets/favicon.png",
+      "assets/adaptive-icon.png"
+    ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.pharmaguide.app",
@@ -48,8 +54,7 @@
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ],
-      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.pharmaguide.app",
-      "googleServicesFile": "./google-services.json"
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.pharmaguide.app"
     },
     "web": {
       "favicon": "./assets/favicon.png"

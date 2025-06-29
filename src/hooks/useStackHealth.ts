@@ -1,8 +1,8 @@
 // src/hooks/useStackHealth.ts
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStackStore } from '../stores/stackStore';
-import { useStackAnalysis } from './useStackAnalysis';
 import type { StackInteractionResult } from '../types';
+import { useStackAnalysis } from './useStackAnalysis';
 
 interface StackHealthData {
   analysis: StackInteractionResult | null;

@@ -1,11 +1,6 @@
 // src/screens/profile/index.ts
 export { ProfileScreen } from './ProfileScreen';
-export { HealthProfileSetupScreen } from './HealthProfileSetupScreen';
-export { DemographicsScreen } from './DemographicsScreen';
-export { MedicationsScreen } from './MedicationsScreen';
-export { HealthGoalsScreen } from './HealthGoalsScreen';
-export { HealthConditionsScreen } from './HealthConditionsScreen';
-export { AllergiesScreen } from './AllergiesScreen';
+// Old health profile screens removed - now using NewHealthProfileSetupScreen
 export { SettingsScreen } from './SettingsScreen';
 export { DataQualityScreen } from './DataQualityScreen';
 export { SupportScreen } from './SupportScreen';

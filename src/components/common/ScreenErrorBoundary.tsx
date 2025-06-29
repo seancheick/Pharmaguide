@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { ErrorBoundary } from './ErrorBoundary';
 import { useNavigation } from '@react-navigation/native';
+import { ErrorBoundary } from './ErrorBoundary';
 
 interface ScreenErrorFallbackProps {
   error: Error;

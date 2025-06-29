@@ -247,7 +247,7 @@ export const DeepLinkingUtils = {
       requiresAuth?: boolean;
       validator?: (params: any) => { isValid: boolean; sanitizedParams?: any; error?: string };
       transformer?: (params: any) => any;
-      guards?: Array<() => boolean | Promise<boolean>>;
+      guards?: (() => boolean | Promise<boolean>)[];
     } = {}
   ) => ({
     path,

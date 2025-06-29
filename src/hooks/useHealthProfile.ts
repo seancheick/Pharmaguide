@@ -76,16 +76,16 @@ export const useHealthProfile = () => {
               migratedProfile.demographics = setupData.demographics;
             }
             if (setupData.goals) {
-              migratedProfile.goals = setupData.goals;
+              migratedProfile.healthGoals = setupData.goals;
             }
             if (setupData.conditions) {
-              migratedProfile.conditions = setupData.conditions;
+              migratedProfile.healthConditions = setupData.conditions;
             }
             if (setupData.allergies) {
-              migratedProfile.allergies = setupData.allergies;
+              migratedProfile.allergiesAndSensitivities = setupData.allergies;
             }
             if (setupData.privacy) {
-              migratedProfile.privacy = setupData.privacy;
+              migratedProfile.privacySettings = setupData.privacy;
             }
 
             // Save to secure storage
@@ -94,7 +94,23 @@ export const useHealthProfile = () => {
               migratedProfile
             );
 
-            const mappedProfile: HealthProfile = savedProfile as HealthProfile;
+            // Validate and safely map profile
+            const mappedProfile: HealthProfile = {
+              id: savedProfile.id,
+              userId: savedProfile.userId,
+              demographics: savedProfile.demographics,
+              healthGoals: savedProfile.healthGoals,
+              healthConditions: savedProfile.healthConditions,
+              allergiesAndSensitivities: savedProfile.allergiesAndSensitivities,
+              privacySettings: savedProfile.privacySettings,
+              notificationSettings: savedProfile.notificationSettings,
+              accessibilitySettings: savedProfile.accessibilitySettings,
+              appSettings: savedProfile.appSettings,
+              profileCompleteness: savedProfile.profileCompleteness,
+              lastActiveAt: savedProfile.lastActiveAt,
+              createdAt: savedProfile.createdAt?.toString() || new Date().toISOString(),
+              updatedAt: savedProfile.updatedAt?.toString() || new Date().toISOString(),
+            };
             setProfile(mappedProfile);
             await calculateCompleteness(mappedProfile);
 
@@ -129,7 +145,13 @@ export const useHealthProfile = () => {
 
   // Add a refresh function that can be called externally
   const refreshProfile = useCallback(async () => {
-    await loadProfile();
+    try {
+      await loadProfile();
+    } catch (error) {
+      console.error('❌ Failed to refresh health profile:', error);
+      // Set error state but don't crash the app
+      setError(error instanceof Error ? error.message : 'Failed to refresh profile');
+    }
   }, [loadProfile]);
 
   const calculateCompleteness = async (data: HealthProfile | null) => {
@@ -141,7 +163,7 @@ export const useHealthProfile = () => {
 
       if (data) {
         // Privacy consent: check if privacy settings exist
-        if (data.privacy) {
+        if (data.privacySettings) {
           profileCompleted++;
         }
 
@@ -156,73 +178,38 @@ export const useHealthProfile = () => {
 
         // Goals: must have primary
         if (
-          data.goals &&
-          typeof data.goals === 'object' &&
-          'primary' in data.goals &&
-          data.goals.primary
+          data.healthGoals &&
+          typeof data.healthGoals === 'object' &&
+          'primary' in data.healthGoals &&
+          data.healthGoals.primary
         ) {
           profileCompleted++;
         }
 
         // Conditions: optional but counts if present (or explicitly skipped)
         if (
-          data.conditions &&
-          typeof data.conditions === 'object' &&
-          'conditions' in data.conditions
+          data.healthConditions &&
+          typeof data.healthConditions === 'object' &&
+          'conditions' in data.healthConditions
         ) {
           profileCompleted++;
         }
 
         // Allergies: optional but counts if present (or explicitly skipped)
         if (
-          data.allergies &&
-          typeof data.allergies === 'object' &&
-          ('allergies' in data.allergies || 'substances' in data.allergies)
+          data.allergiesAndSensitivities &&
+          typeof data.allergiesAndSensitivities === 'object' &&
+          'allergies' in data.allergiesAndSensitivities
         ) {
           profileCompleted++;
         }
       }
 
-      // If we have actual profile data, use that calculation
-      if (profileCompleted > 0) {
-        const completenessPercentage = Math.round((profileCompleted / profileTotal) * 100);
-        console.log(`📊 Profile completeness: ${profileCompleted}/${profileTotal} = ${completenessPercentage}%`);
-        setCompleteness(completenessPercentage);
-        return;
-      }
-
-      // Fallback: Check AsyncStorage for setup progress (for consistency with HealthProfileSetupScreen)
-      try {
-        const AsyncStorage = await import(
-          '@react-native-async-storage/async-storage'
-        );
-        const savedProgress = await AsyncStorage.default.getItem(
-          'health_profile_setup_progress'
-        );
-
-        if (savedProgress) {
-          const { steps } = JSON.parse(savedProgress);
-          if (Array.isArray(steps)) {
-            const completedSteps = steps.filter(
-              (step: any) => step.completed
-            ).length;
-            const setupCompleteness = Math.round((completedSteps / 5) * 100); // 5 steps total
-            console.log(`📊 Setup progress completeness: ${completedSteps}/5 = ${setupCompleteness}%`);
-            setCompleteness(setupCompleteness);
-            return;
-          }
-        }
-      } catch (asyncStorageError) {
-        console.warn(
-          'Could not read setup progress from AsyncStorage:',
-          asyncStorageError
-        );
-      }
-
-      // Default to 0 if no data found
-      setCompleteness(0);
+      const calculatedCompleteness = Math.round((profileCompleted / profileTotal) * 100);
+      setCompleteness(calculatedCompleteness);
+      console.log(`📊 Profile completeness: ${profileCompleted}/${profileTotal} = ${calculatedCompleteness}%`);
     } catch (error) {
-      console.error('Error calculating completeness:', error);
+      console.error('❌ Error calculating completeness:', error);
       setCompleteness(0);
     }
   };
@@ -273,9 +260,6 @@ export const useHealthProfile = () => {
       setProfile(mappedProfile);
       await calculateCompleteness(mappedProfile);
 
-      // Sync with HealthProfileSetupScreen progress
-      await syncSetupProgress(section, mappedProfile);
-
       console.log(
         `✅ Health profile ${section} updated locally (HIPAA compliant)`
       );
@@ -287,63 +271,6 @@ export const useHealthProfile = () => {
       return { data: null, error: errorMessage };
     } finally {
       setLoading(false);
-    }
-  };
-
-  // Sync progress with HealthProfileSetupScreen AsyncStorage
-  const syncSetupProgress = async (
-    section: keyof HealthProfile,
-    _profile: HealthProfile
-  ) => {
-    try {
-      const AsyncStorage = await import(
-        '@react-native-async-storage/async-storage'
-      );
-      const savedProgress = await AsyncStorage.default.getItem(
-        'health_profile_setup_progress'
-      );
-
-      if (savedProgress) {
-        const { currentStep, steps } = JSON.parse(savedProgress);
-
-        // Map profile sections to step IDs
-        const sectionToStepMap: Record<keyof HealthProfile, string> = {
-          demographics: 'demographics',
-          goals: 'health_goals',
-          conditions: 'health_conditions',
-          allergies: 'allergies',
-          privacy: 'privacy_consent',
-        };
-
-        const stepId = sectionToStepMap[section];
-        if (stepId) {
-          // Mark the corresponding step as completed
-          const updatedSteps = steps.map((step: any) =>
-            step.id === stepId ? { ...step, completed: true } : step
-          );
-
-          // Find the next incomplete step
-          const nextIncompleteIndex = updatedSteps.findIndex(
-            (step: any) => !step.completed
-          );
-          const newCurrentStep =
-            nextIncompleteIndex >= 0 ? nextIncompleteIndex : currentStep;
-
-          // Save updated progress
-          await AsyncStorage.default.setItem(
-            'health_profile_setup_progress',
-            JSON.stringify({
-              currentStep: newCurrentStep,
-              steps: updatedSteps,
-            })
-          );
-
-          console.log(`✅ Synced ${section} completion with setup progress`);
-        }
-      }
-    } catch (error) {
-      console.warn('Could not sync setup progress:', error);
-      // Don't throw - this is not critical
     }
   };
 
@@ -361,10 +288,10 @@ export const useHealthProfile = () => {
     // Typed helper methods for specific updates
     updateDemographics: (data: Demographics) =>
       updateProfile('demographics', data),
-    updateGoals: (data: HealthGoals) => updateProfile('goals', data),
+    updateGoals: (data: HealthGoals) => updateProfile('healthGoals', data),
     updateConditions: (data: HealthConditions) =>
-      updateProfile('conditions', data),
+      updateProfile('healthConditions', data),
     updateAllergies: (data: AllergiesAndSensitivities) =>
-      updateProfile('allergies', data),
+      updateProfile('allergiesAndSensitivities', data),
   };
 };

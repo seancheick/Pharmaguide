@@ -4,8 +4,8 @@
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { openDatabaseSync } from 'expo-sqlite/next';
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
-import * as schema from './schema';
 import { performanceMonitor } from '../performance/performanceMonitor';
+import * as schema from './schema';
 
 export class DrizzleAdapter {
   private static instance: DrizzleAdapter;

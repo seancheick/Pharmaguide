@@ -5,15 +5,6 @@
  */
 
 // Mock React Native modules to avoid test setup issues
-jest.mock('react-native', () => ({
-  Platform: { OS: 'ios' },
-}));
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-}));
-
 import {
   transformDbToProduct,
   transformProductToDb,
@@ -30,6 +21,15 @@ import {
   validateUserProfile,
   sanitizeUserProfile,
 } from '../databaseTransforms';
+
+jest.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
+}));
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+}));
 
 // Define minimal types for testing
 type DatabaseProduct = {

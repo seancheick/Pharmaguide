@@ -92,7 +92,6 @@ export const productService = {
 
   /**
    * Transform database product to app format
-   * @deprecated Use transformDbToProduct from databaseTransforms instead
    */
   transformProduct(dbProduct: DatabaseProduct): Product {
     // Use centralized transformation but handle type differences
@@ -410,26 +409,10 @@ export const scanService = {
 
     if (error || !data) return [];
 
-    return data.map(this.transformScanResult);
+    return data.map(transformDbToScanResult);
   },
 
-  /**
-   * Transform database scan to app format
-   * @deprecated Use transformDbToScanResult from databaseTransforms instead
-   */
-  transformScanResult(dbScan: any): ScanResult {
-    // Use centralized transformation
-    const scanResult = transformDbToScanResult(dbScan);
-
-    // Add product if available
-    if (dbScan.product) {
-      scanResult.product = productService.transformProduct(
-        dbScan.product
-      ) as any;
-    }
-
-    return scanResult;
-  },
+  // Removed deprecated transformScanResult function - use transformDbToScanResult from databaseTransforms instead
 };
 
 /**

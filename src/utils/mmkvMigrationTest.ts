@@ -3,8 +3,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { storageAdapter } from '../services/storage/storageAdapter';
-import { safeStorage } from './safeStorage';
 import { performanceMonitor } from '../services/performance/performanceMonitor';
+import { safeStorage } from './safeStorage';
 
 interface TestResult {
   testName: string;

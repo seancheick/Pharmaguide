@@ -1,9 +1,10 @@
 // src/stores/stackStore.ts - Enhanced version using safeStorage
 
 import { create } from 'zustand';
+import type { PostgrestError } from '@supabase/supabase-js';
 import { safeStorage } from '../utils/safeStorage'; // Use safeStorage instead
 // import { supabase } from '../services/supabase/client';
-import { generateUUID } from '../utils/uuid';
+// import { generateUUID } from '../utils/uuid';
 import {
   transformDbToUserStack,
   transformDbArrayToUserStack,
@@ -13,7 +14,6 @@ import {
   sanitizeStackItem,
 } from '../utils/databaseTransforms';
 import type { UserStack, DatabaseUserStack } from '../types';
-import type { PostgrestError } from '@supabase/supabase-js';
 
 // Helper function to safely get user ID with the new RPC function
 // All user stack data is now local-only. No user creation or Supabase sync needed.
@@ -71,6 +71,15 @@ interface StackStore {
 
 const STACK_STORAGE_KEY = 'pharmaguide_user_stack';
 
+// Add debugging for stack persistence
+const debugStackStorage = async (operation: string, data?: any) => {
+  console.log(`🗂️ Stack Storage ${operation}:`, {
+    key: STACK_STORAGE_KEY,
+    dataLength: data ? (Array.isArray(data) ? data.length : 'not array') : 'no data',
+    timestamp: new Date().toISOString(),
+  });
+};
+
 export const useStackStore = create<StackStore>((set, get) => ({
   stack: [],
   initialized: false,
@@ -84,15 +93,22 @@ export const useStackStore = create<StackStore>((set, get) => ({
   loadStack: async () => {
     set({ loading: true });
     try {
+      await debugStackStorage('LOAD_START');
+
       // First try to load from local storage for immediate display
       const storedStack = await safeStorage.getItem(STACK_STORAGE_KEY);
       const localStack: UserStack[] = storedStack
         ? JSON.parse(storedStack)
         : [];
 
+      await debugStackStorage('LOAD_SUCCESS', localStack);
+
       // Set local stack immediately to improve perceived performance
       if (localStack.length > 0) {
         set({ stack: localStack });
+        console.log(`🗂️ Loaded ${localStack.length} items from stack storage`);
+      } else {
+        console.log('🗂️ No items found in stack storage');
       }
 
       // Only load from local storage; no remote stack
@@ -100,6 +116,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
       await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(localStack));
     } catch (error: any) {
       console.error('Error loading stack (outer catch):', error);
+      await debugStackStorage('LOAD_ERROR', error);
       set({ initialized: true });
 
       // Always attempt to load from local storage as a last resort
@@ -108,6 +125,7 @@ export const useStackStore = create<StackStore>((set, get) => ({
         if (stored) {
           const localStack: UserStack[] = JSON.parse(stored);
           set({ stack: localStack });
+          console.log(`🗂️ Fallback loaded ${localStack.length} items from stack storage`);
         }
       } catch (localError) {
         console.error('Error loading local stack fallback:', localError);
@@ -175,7 +193,10 @@ export const useStackStore = create<StackStore>((set, get) => ({
 
     try {
       // Only add to local stack
-      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(get().stack));
+      const currentStack = get().stack;
+      await debugStackStorage('ADD_SAVE', currentStack);
+      await safeStorage.setItem(STACK_STORAGE_KEY, JSON.stringify(currentStack));
+      console.log(`✅ Successfully added "${newItem.name}" to stack. Total items: ${currentStack.length}`);
     } catch (error: any) {
       console.error('Error adding to stack (local only):', error);
       set(state => ({

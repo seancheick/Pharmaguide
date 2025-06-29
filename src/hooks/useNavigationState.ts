@@ -199,12 +199,12 @@ export const useNavigationState = (
  */
 export const useNavigationGuards = (
   screenName: string,
-  guards: Array<{
+  guards: {
     condition: () => boolean | Promise<boolean>;
     message?: string;
     onBlock?: () => void;
     priority?: number;
-  }>
+  }[]
 ) => {
   useEffect(() => {
     // Register guards

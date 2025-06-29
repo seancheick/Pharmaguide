@@ -1,9 +1,9 @@
 // src/services/storage/performanceStorageWrapper.ts
 // Performance wrapper that enhances existing storage with optimizations
 
+import { performanceMonitor } from '../performance/performanceMonitor';
 import { storageAdapter } from './storageAdapter';
 import { optimizedMMKVStorage } from './optimizedMMKVStorage';
-import { performanceMonitor } from '../performance/performanceMonitor';
 
 interface CacheEntry {
   value: string;
@@ -139,7 +139,7 @@ export class PerformanceStorageWrapper {
   /**
    * Batch multiple operations for better performance
    */
-  async batchSet(items: Array<{ key: string; value: string }>): Promise<void> {
+  async batchSet(items: { key: string; value: string }[]): Promise<void> {
     const startTime = Date.now();
 
     try {

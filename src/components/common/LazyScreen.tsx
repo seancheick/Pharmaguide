@@ -9,8 +9,8 @@ import {
   ActivityIndicator,
   SafeAreaView,
 } from 'react-native';
-import { OptimizedIcon } from './OptimizedIcon';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
+import { OptimizedIcon } from './OptimizedIcon';
 
 interface LazyScreenProps {
   fallback?: React.ReactNode;

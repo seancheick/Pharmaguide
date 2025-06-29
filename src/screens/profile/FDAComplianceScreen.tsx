@@ -10,10 +10,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { COLORS, TYPOGRAPHY, SPACING } from '../../constants';
 import { FDADisclaimer, SourceCitation } from '../../components/compliance';
 import { useFDACompliance } from '../../hooks/useFDACompliance';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { ProfileStackParamList } from '../../types/navigation';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'FDACompliance'>;

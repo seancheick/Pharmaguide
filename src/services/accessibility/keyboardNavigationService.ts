@@ -49,7 +49,7 @@ class KeyboardNavigationService {
   private focusableElements = new Map<string, FocusableElement>();
   private focusTraps = new Map<string, FocusTrap>();
   private currentFocusId: string | null = null;
-  private keyboardListeners: Array<() => void> = [];
+  private keyboardListeners: (() => void)[] = [];
   private isInitialized = false;
 
   /**

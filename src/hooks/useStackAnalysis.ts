@@ -1,13 +1,13 @@
 // src/hooks/useStackAnalysis.ts
 import { useState, useEffect, useCallback } from 'react';
 import { interactionService } from '../services/interactions';
-import { useAuth } from './useAuth';
 import type {
   UserStack,
   StackInteractionResult,
   RiskLevel,
   Product,
 } from '../types';
+import { useAuth } from './useAuth';
 
 interface UseStackAnalysisProps {
   stack: UserStack[];

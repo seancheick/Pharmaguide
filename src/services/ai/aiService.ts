@@ -9,6 +9,7 @@ import {
 } from '../analysis/supplementAnalyzer';
 import { analysisRateLimiter } from '../../utils/rateLimiting';
 import { localHealthProfileService } from '../health/localHealthProfileService';
+import { retryWithBackoff, RetryConfigs, CircuitBreaker } from '../../utils/retryWithBackoff';
 import { AIModelManager } from './AIModelManager';
 import { AICache } from './AICache';
 import { threeTierRouter, ThreeTierResult } from './threeTierRouter';
@@ -63,6 +64,7 @@ export class AIService {
   private modelManager: AIModelManager;
   private cache: AICache;
   private requestQueue: Map<string, Promise<any>> = new Map();
+  private circuitBreaker: CircuitBreaker;
 
   constructor() {
     this.supplementAnalyzer = new SupplementAnalyzer();
@@ -73,6 +75,7 @@ export class AIService {
       maxEntries: 2000,
       persistToDisk: true,
     });
+    this.circuitBreaker = new CircuitBreaker(5, 60000); // 5 failures, 1 minute recovery
   }
 
   /**
@@ -144,24 +147,36 @@ export class AIService {
     stack: UserStack[],
     analysisType: 'groq' | 'huggingface' = 'groq'
   ): Promise<AIAnalysisResult> {
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-analysis', {
-        body: {
-          action: 'analyze-product',
-          product: this.sanitizeProduct(product),
-          stack: stack.map(item => this.sanitizeStackItem(item)),
-          analysisType,
+    return this.circuitBreaker.execute(async () => {
+      const retryResult = await retryWithBackoff(
+        async () => {
+          const { data, error } = await supabase.functions.invoke('ai-analysis', {
+            body: {
+              action: 'analyze-product',
+              product: this.sanitizeProduct(product),
+              stack: stack.map(item => this.sanitizeStackItem(item)),
+              analysisType,
+            },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+
+          if (error) throw error;
+          if (!data) throw new Error('No data received from AI service');
+
+          return data;
         },
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+        {
+          ...RetryConfigs.aiService,
+          onRetry: (error, attempt) => {
+            console.warn(`AI analysis retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+          }
+        }
+      );
 
-      if (error) throw error;
-      if (!data) throw new Error('No data received from AI service');
-
-      return data;
-    } catch (error) {
+      return retryResult.result;
+    }).catch(error => {
       return this.handleError(error);
-    }
+    });
   }
 
   /**
@@ -203,12 +218,18 @@ export class AIService {
       }
 
       // 🚀 THREE-TIER ROUTING: Rules → Cache → AI
-      const result = await threeTierRouter.analyzeProduct(
-        product,
-        stack,
-        healthProfile,
-        options
-      );
+      const result = await this.circuitBreaker.execute(async () => {
+        const retryResult = await retryWithBackoff(
+          () => threeTierRouter.analyzeProduct(product, stack, healthProfile, options),
+          {
+            ...RetryConfigs.aiService,
+            onRetry: (error, attempt) => {
+              console.warn(`Three-tier analysis retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+            }
+          }
+        );
+        return retryResult.result;
+      });
 
       console.log(
         `🚀 Three-tier analysis completed: ${result.tier} (${result.responseTime}ms, saved $${result.costSavings.toFixed(4)})`
@@ -373,47 +394,55 @@ export class AIService {
       `🎯 Using model: ${selectedModel.name} with ${fallbackChain.length - 1} fallbacks`
     );
 
-    // Try primary model and fallbacks
-    for (const model of fallbackChain) {
-      const modelStartTime = Date.now();
+    // Try primary model and fallbacks with circuit breaker protection
+    return this.circuitBreaker.execute(async () => {
+      // Try primary model and fallbacks
+      for (const model of fallbackChain) {
+        const modelStartTime = Date.now();
 
-      try {
-        const result = await this.callModelWithRetry(
-          model,
-          product,
-          stack,
-          healthProfile
-        );
+        try {
+          const retryResult = await retryWithBackoff(
+            () => this.callModelWithRetry(model, product, stack, healthProfile),
+            {
+              ...RetryConfigs.aiService,
+              onRetry: (error, attempt) => {
+                console.warn(`Model ${model.name} retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+              }
+            }
+          );
 
-        // Record successful performance
-        this.modelManager.recordPerformance(
-          model.id,
-          Date.now() - modelStartTime,
-          this.estimateTokenUsage(result),
-          true,
-          this.calculateResultQuality(result)
-        );
+          const result = retryResult.result;
 
-        return this.validateEnhancedResponse(result);
-      } catch (error) {
-        console.warn(`Model ${model.name} failed:`, error);
+          // Record successful performance
+          this.modelManager.recordPerformance(
+            model.id,
+            Date.now() - modelStartTime,
+            this.estimateTokenUsage(result),
+            true,
+            this.calculateResultQuality(result)
+          );
 
-        // Record failure
-        this.modelManager.recordPerformance(
-          model.id,
-          Date.now() - modelStartTime,
-          0,
-          false
-        );
+          return this.validateEnhancedResponse(result);
+        } catch (error) {
+          console.warn(`Model ${model.name} failed after retries:`, error);
 
-        // Continue to next model in fallback chain
-        if (model === fallbackChain[fallbackChain.length - 1]) {
-          throw error; // Last model failed
+          // Record failure
+          this.modelManager.recordPerformance(
+            model.id,
+            Date.now() - modelStartTime,
+            0,
+            false
+          );
+
+          // Continue to next model in fallback chain
+          if (model === fallbackChain[fallbackChain.length - 1]) {
+            throw error; // Last model failed
+          }
         }
       }
-    }
 
-    throw new Error('All AI models failed');
+      throw new Error('All AI models failed');
+    });
   }
 
   /**
@@ -425,25 +454,37 @@ export class AIService {
     healthProfile: UserProfile,
     analysisType: 'groq' | 'huggingface' = 'groq'
   ): Promise<AIAnalysisResult> {
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-analysis', {
-        body: {
-          action: 'analyze-product-personalized',
-          product: this.sanitizeProduct(product),
-          stack: stack.map(item => this.sanitizeStackItem(item)),
-          healthProfile: this.sanitizeHealthProfile(healthProfile),
-          analysisType,
+    return this.circuitBreaker.execute(async () => {
+      const retryResult = await retryWithBackoff(
+        async () => {
+          const { data, error } = await supabase.functions.invoke('ai-analysis', {
+            body: {
+              action: 'analyze-product-personalized',
+              product: this.sanitizeProduct(product),
+              stack: stack.map(item => this.sanitizeStackItem(item)),
+              healthProfile: this.sanitizeHealthProfile(healthProfile),
+              analysisType,
+            },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+
+          if (error) throw error;
+          if (!data) throw new Error('No data received from AI service');
+
+          return data;
         },
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+        {
+          ...RetryConfigs.aiService,
+          onRetry: (error, attempt) => {
+            console.warn(`Health profile analysis retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+          }
+        }
+      );
 
-      if (error) throw error;
-      if (!data) throw new Error('No data received from AI service');
-
-      return data;
-    } catch (error) {
+      return retryResult.result;
+    }).catch(error => {
       return this.handleError(error);
-    }
+    });
   }
 
   /**
@@ -460,30 +501,42 @@ export class AIService {
     clinicalRecommendations: string[];
     confidenceLevel: number;
   }> {
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-analysis', {
-        body: {
-          action: 'analyze-interactions-enhanced',
-          product: this.sanitizeProduct(product),
-          stack: stack.map(item => this.sanitizeStackItem(item)),
-          healthProfile: healthProfile
-            ? this.sanitizeHealthProfile(healthProfile)
-            : undefined,
+    return this.circuitBreaker.execute(async () => {
+      const retryResult = await retryWithBackoff(
+        async () => {
+          const { data, error } = await supabase.functions.invoke('ai-analysis', {
+            body: {
+              action: 'analyze-interactions-enhanced',
+              product: this.sanitizeProduct(product),
+              stack: stack.map(item => this.sanitizeStackItem(item)),
+              healthProfile: healthProfile
+                ? this.sanitizeHealthProfile(healthProfile)
+                : undefined,
+            },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+
+          if (error) throw error;
+          if (!data) throw new Error('No interaction data received');
+
+          return {
+            interactions: data.interactions || [],
+            timingRecommendations: data.timingRecommendations || [],
+            cumulativeWarnings: data.nutrientWarnings || [],
+            clinicalRecommendations: data.recommendations?.immediate || [],
+            confidenceLevel: data.confidenceLevel || 70,
+          };
         },
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+        {
+          ...RetryConfigs.aiService,
+          onRetry: (error, attempt) => {
+            console.warn(`Interaction insights retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+          }
+        }
+      );
 
-      if (error) throw error;
-      if (!data) throw new Error('No interaction data received');
-
-      return {
-        interactions: data.interactions || [],
-        timingRecommendations: data.timingRecommendations || [],
-        cumulativeWarnings: data.nutrientWarnings || [],
-        clinicalRecommendations: data.recommendations?.immediate || [],
-        confidenceLevel: data.confidenceLevel || 70,
-      };
-    } catch (error) {
+      return retryResult.result;
+    }).catch(error => {
       console.error('Interaction insights failed:', error);
 
       // Return safe fallback
@@ -496,28 +549,40 @@ export class AIService {
         ],
         confidenceLevel: 30,
       };
-    }
+    });
   }
 
   /**
    * Test AI service connectivity and health
    */
   async testConnectivity(): Promise<AIHealthCheckResult> {
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-analysis', {
-        body: {
-          action: 'health-check',
+    return this.circuitBreaker.execute(async () => {
+      const retryResult = await retryWithBackoff(
+        async () => {
+          const { data, error } = await supabase.functions.invoke('ai-analysis', {
+            body: {
+              action: 'health-check',
+            },
+            headers: { 'Cache-Control': 'no-cache' },
+          });
+
+          if (error) throw error;
+
+          return {
+            ...data,
+            timestamp: new Date().toISOString(),
+          };
         },
-        headers: { 'Cache-Control': 'no-cache' },
-      });
+        {
+          ...RetryConfigs.aiService,
+          onRetry: (error, attempt) => {
+            console.warn(`AI connectivity test retry ${attempt}/${RetryConfigs.aiService.maxRetries}: ${error.message}`);
+          }
+        }
+      );
 
-      if (error) throw error;
-
-      return {
-        ...data,
-        timestamp: new Date().toISOString(),
-      };
-    } catch (error) {
+      return retryResult.result;
+    }).catch(async (error) => {
       console.error('AI connectivity test failed:', error);
 
       // Try to test individual services directly as fallback
@@ -531,7 +596,7 @@ export class AIService {
         errors: [error instanceof Error ? error.message : 'Unknown error'],
         fallbackTested: true,
       };
-    }
+    });
   }
 
   /**

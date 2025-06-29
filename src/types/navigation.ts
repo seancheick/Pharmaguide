@@ -22,27 +22,7 @@ export type RootStackParamList = {
   };
 
   // Health Profile Screens
-  HealthProfileSetup: undefined;
-  DemographicsScreen: {
-    fromSetup?: boolean;
-    initialValue?: any;
-  };
-  HealthGoalsScreen: {
-    fromSetup?: boolean;
-    initialValue?: any;
-  };
-  HealthConditionsScreen: {
-    fromSetup?: boolean;
-    initialValue?: any;
-  };
-  AllergiesScreen: {
-    fromSetup?: boolean;
-    initialValue?: any;
-  };
-  MedicationsScreen: {
-    fromSetup?: boolean;
-    initialValue?: any;
-  };
+  NewHealthProfileSetup: undefined;
 
   // Profile Section Screens
   SettingsScreen: undefined;
@@ -136,15 +116,8 @@ export type ProductAnalysisResultsProps =
   RootStackScreenProps<'ProductAnalysisResults'>;
 
 // Health Profile Screens
-export type HealthProfileSetupScreenProps =
-  RootStackScreenProps<'HealthProfileSetup'>;
-export type DemographicsScreenProps =
-  RootStackScreenProps<'DemographicsScreen'>;
-export type HealthGoalsScreenProps = RootStackScreenProps<'HealthGoalsScreen'>;
-export type HealthConditionsScreenProps =
-  RootStackScreenProps<'HealthConditionsScreen'>;
-export type AllergiesScreenProps = RootStackScreenProps<'AllergiesScreen'>;
-export type MedicationsScreenProps = RootStackScreenProps<'MedicationsScreen'>;
+export type NewHealthProfileSetupScreenProps =
+  RootStackScreenProps<'NewHealthProfileSetup'>;
 
 // Profile Section Screens
 export type SettingsScreenProps = RootStackScreenProps<'SettingsScreen'>;

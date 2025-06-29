@@ -41,10 +41,10 @@ interface AccessibilityPropsOptions {
     now?: number;
     text?: string;
   };
-  actions?: Array<{
+  actions?: {
     name: string;
     label: string;
-  }>;
+  }[];
 }
 
 interface AccessibilityProps {

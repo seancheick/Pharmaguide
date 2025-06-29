@@ -1,8 +1,8 @@
 // src/hooks/useAuth.tsx
 
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { supabase } from '../services/supabase/client'; // Correct path
 import { Session, User as SupabaseUser } from '@supabase/supabase-js';
+import { supabase } from '../services/supabase/client'; // Correct path
 import { safeStorage } from '../utils/safeStorage';
 import type {
   User,

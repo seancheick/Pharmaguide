@@ -6,11 +6,12 @@ import {
   SafeAreaView,
   ScrollView,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS, SPACING } from '../../constants';
 import { useAuth } from '../../hooks/useAuth';
-import { useHealthProfile } from '../../hooks/useHealthProfile';
+import { useNewHealthProfile } from '../../hooks/useNewHealthProfile';
 import { useHomeData } from '../../hooks/useHomeData';
 import { useStackStore } from '../../stores/stackStore';
 import {
@@ -19,19 +20,21 @@ import {
   RecentScansCarousel,
   DailyTips,
 } from '../../components/home';
+import { ProductSearchBar } from '../../components/search';
+import { ScreenErrorBoundary } from '../../components/common/ScreenErrorBoundary';
 
 export const HomeScreen = React.memo(() => {
   const navigation = useNavigation();
   const { user } = useAuth();
-  const { profile: healthProfile } = useHealthProfile();
-  const { recentScans, gameStats, loading, loadData } = useHomeData();
+  const { profile: healthProfile } = useNewHealthProfile();
+  const { recentScans, gameStats, loading, refreshing, refreshData } = useHomeData();
   const { stack } = useStackStore();
 
   // Load data when screen focuses
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData])
+      refreshData();
+    }, [refreshData])
   );
 
   // Navigation handlers
@@ -48,6 +51,11 @@ export const HomeScreen = React.memo(() => {
     // Handle helpful feedback
     console.log('Helpful clicked for scan:', scanId);
   }, []);
+
+  // Search handler - navigate to Search screen with query
+  const handleSearch = useCallback((query: string) => {
+    navigation.navigate('Search', { initialQuery: query });
+  }, [navigation]);
 
   // Get user's display name with debugging
   const userName = React.useMemo(() => {
@@ -68,22 +76,39 @@ export const HomeScreen = React.memo(() => {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      </SafeAreaView>
+      <ScreenErrorBoundary screenName="HomeScreen">
+        <SafeAreaView style={styles.container}>
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+          </View>
+        </SafeAreaView>
+      </ScreenErrorBoundary>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
+    <ScreenErrorBoundary screenName="HomeScreen">
+      <SafeAreaView style={styles.container}>
+        <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshData}
+            tintColor={COLORS.primary}
+            colors={[COLORS.primary]}
+          />
+        }
       >
         {/* Header - Keep unchanged as requested */}
         <HomeHeader userName={userName} />
+
+        {/* Search Bar - Added right below HomeHeader */}
+        <ProductSearchBar
+          onSearchPress={handleSearch}
+          placeholder="Search supplements, vitamins, medications..."
+        />
 
         {/* Unified Gamification Card */}
         <UnifiedGamificationCard
@@ -107,6 +132,7 @@ export const HomeScreen = React.memo(() => {
         <DailyTips />
       </ScrollView>
     </SafeAreaView>
+    </ScreenErrorBoundary>
   );
 });
 

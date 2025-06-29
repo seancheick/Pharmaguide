@@ -1,17 +1,21 @@
 // src/services/monitoring/index.ts
+// Initialize monitoring services
+import { securityService } from '../security/securityService';
+import { crashReporting } from './crashReporting';
+import { performanceMonitor } from './performanceMonitor';
+import { performanceDashboard } from './performanceDashboard';
+import { performanceAlerts } from './performanceAlerts';
+import { logger } from './logger';
+
 export { crashReporting } from './crashReporting';
 export { performanceMonitor } from './performanceMonitor';
+export { performanceDashboard } from './performanceDashboard';
+export { performanceAlerts } from './performanceAlerts';
 export { logger } from './logger';
 
 export type { CustomError, UserContext, CrashReportingConfig } from './crashReporting';
 export type { PerformanceMetric, MemoryMetric, NetworkMetric } from './performanceMonitor';
 export type { LogLevel, LogCategory, LogEntry, LoggerConfig } from './logger';
-
-// Initialize monitoring services
-import { crashReporting } from './crashReporting';
-import { performanceMonitor } from './performanceMonitor';
-import { logger } from './logger';
-import { securityService } from '../security/securityService';
 
 /**
  * Initialize all monitoring services
@@ -49,6 +53,8 @@ export const initializeMonitoring = async (config: {
     // Initialize performance monitoring
     if (config.enablePerformanceMonitoring !== false) {
       performanceMonitor.initialize();
+      performanceDashboard.initialize();
+      performanceAlerts.initialize();
     }
 
     // Initialize security service
@@ -111,6 +117,8 @@ export const getMonitoringStatus = () => {
     performanceMonitoring: {
       active: performanceMonitor.isActive(),
       summary: performanceMonitor.getPerformanceSummary(),
+      dashboard: performanceDashboard.getStatus(),
+      alerts: performanceAlerts.getAlertStats(),
     },
     logging: {
       sessionId: logger.getSessionId(),

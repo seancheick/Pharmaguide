@@ -9,12 +9,12 @@ interface TestProduct {
   name: string;
   brand: string;
   category: string;
-  ingredients: Array<{
+  ingredients: {
     name: string;
     amount: string;
     unit: string;
     category: string;
-  }>;
+  }[];
 }
 
 interface TestStackItem {
@@ -23,11 +23,11 @@ interface TestStackItem {
   type: 'supplement' | 'medication';
   dosage: string;
   frequency: string;
-  ingredients: Array<{
+  ingredients: {
     name: string;
     amount: string;
     unit: string;
-  }>;
+  }[];
 }
 
 interface TestHealthProfile {

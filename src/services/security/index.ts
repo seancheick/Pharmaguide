@@ -1,4 +1,8 @@
 // src/services/security/index.ts
+import { logger } from '../monitoring/logger';
+import { securityService } from './securityService';
+import { securityHeaders } from './securityHeaders';
+
 export { securityService } from './securityService';
 export { securityHeaders } from './securityHeaders';
 
@@ -13,10 +17,6 @@ export type {
 export type { 
   SecurityHeadersConfig 
 } from './securityHeaders';
-
-import { securityService } from './securityService';
-import { securityHeaders } from './securityHeaders';
-import { logger } from '../monitoring/logger';
 
 /**
  * Initialize all security services

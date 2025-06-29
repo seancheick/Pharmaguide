@@ -5,13 +5,23 @@
 import { secureStorage } from '../storage/secureStorage';
 import type { HealthProfile } from '../../types';
 
-interface LocalHealthProfile extends HealthProfile {
+interface LocalHealthProfile {
   id: string;
   userId: string;
   version: number;
   createdAt: number;
   updatedAt: number;
   isComplete: boolean;
+  demographics?: any;
+  healthGoals?: any;
+  healthConditions?: any;
+  allergiesAndSensitivities?: any;
+  privacySettings?: any;
+  notificationSettings?: any;
+  accessibilitySettings?: any;
+  appSettings?: any;
+  profileCompleteness: number;
+  lastActiveAt: string;
 }
 
 /**
@@ -23,6 +33,8 @@ interface LocalHealthProfile extends HealthProfile {
  */
 export class LocalHealthProfileService {
   private readonly DATA_TYPE = 'health_profile' as const;
+  private profileCache: Map<string, { profile: LocalHealthProfile | null; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 30000; // 30 seconds cache TTL
 
   /**
    * Initialize the service
@@ -30,6 +42,28 @@ export class LocalHealthProfileService {
   async initialize(): Promise<void> {
     await secureStorage.initialize();
     console.log('🏥 Local health profile service initialized');
+  }
+
+  /**
+   * Clear cache for a specific user or all users
+   */
+  private clearCache(userId?: string): void {
+    if (userId) {
+      this.profileCache.delete(userId);
+    } else {
+      this.profileCache.clear();
+    }
+  }
+
+  /**
+   * Check if cached profile is still valid
+   */
+  private isCacheValid(userId: string): boolean {
+    const cached = this.profileCache.get(userId);
+    if (!cached) return false;
+
+    const now = Date.now();
+    return (now - cached.timestamp) < this.CACHE_TTL;
   }
 
   /**
@@ -48,27 +82,28 @@ export class LocalHealthProfileService {
         createdAt: existing?.createdAt || now,
         updatedAt: now,
         isComplete: this.isProfileComplete(profile),
-        
-        // Merge with existing data
+        // Merge with existing data, always provide safe defaults
         demographics: {
           ...existing?.demographics,
           ...profile.demographics,
         },
-        conditions: {
-          ...existing?.conditions,
-          ...profile.conditions,
+        healthConditions: {
+          ...(existing?.healthConditions || { conditions: [], consentGiven: false, lastUpdated: new Date().toISOString() }),
+          ...(profile.healthConditions || {}),
+          conditions: (profile.healthConditions?.conditions || existing?.healthConditions?.conditions || []),
         },
-        allergies: {
-          ...existing?.allergies,
-          ...profile.allergies,
+        allergiesAndSensitivities: {
+          ...(existing?.allergiesAndSensitivities || { allergies: [], consentGiven: false, lastUpdated: new Date().toISOString() }),
+          ...(profile.allergiesAndSensitivities || {}),
+          allergies: (profile.allergiesAndSensitivities?.allergies || existing?.allergiesAndSensitivities?.allergies || []),
         },
-        goals: {
-          ...existing?.goals,
-          ...profile.goals,
+        healthGoals: {
+          ...existing?.healthGoals,
+          ...profile.healthGoals,
         },
-        privacy: {
-          ...existing?.privacy,
-          ...profile.privacy,
+        privacySettings: {
+          ...existing?.privacySettings,
+          ...profile.privacySettings,
         },
       };
 
@@ -81,7 +116,10 @@ export class LocalHealthProfileService {
       );
 
       console.log(`🔐 Health profile saved locally for user ${userId} (version ${updatedProfile.version})`);
-      
+
+      // Clear cache to ensure fresh data on next load
+      this.clearCache(userId);
+
       // Log audit trail (no PHI in logs)
       this.logAuditEvent(userId, 'profile_updated', {
         version: updatedProfile.version,
@@ -101,10 +139,19 @@ export class LocalHealthProfileService {
    */
   async getHealthProfile(userId: string): Promise<LocalHealthProfile | null> {
     try {
+      // Check cache first to prevent excessive database scans
+      if (this.isCacheValid(userId)) {
+        const cached = this.profileCache.get(userId);
+        console.log(`📋 Using cached health profile for user ${userId}`);
+        return cached!.profile;
+      }
+
       const profiles = await secureStorage.getHealthData(userId, this.DATA_TYPE);
 
       if (profiles.length === 0) {
         console.log(`ℹ️ No health profile found for user ${userId}`);
+        // Cache the null result to prevent repeated database scans
+        this.profileCache.set(userId, { profile: null, timestamp: Date.now() });
         return null;
       }
 
@@ -135,15 +182,55 @@ export class LocalHealthProfileService {
         updatedAt: profileData.updatedAt || Date.now(),
         isComplete: profileData.isComplete || false,
         demographics: profileData.demographics || {},
-        conditions: profileData.conditions || { conditions: [] },
-        allergies: profileData.allergies || { substances: [] },
-        goals: profileData.goals || {},
-        privacy: profileData.privacy || {
+        healthConditions: profileData.healthConditions || { conditions: [], consentGiven: false, lastUpdated: new Date().toISOString() },
+        allergiesAndSensitivities: profileData.allergiesAndSensitivities || { allergies: [], consentGiven: false, lastUpdated: new Date().toISOString() },
+        healthGoals: profileData.healthGoals || {},
+        privacySettings: profileData.privacySettings || {
           dataRetention: 'indefinite',
           analyticsOptIn: false,
           aiAnalysisOptIn: false, // Default to opt-out for HIPAA compliance
         },
+        // Additional UserProfile properties
+        notificationSettings: profileData.notificationSettings || {
+          newFeatures: false,
+          safetyUpdates: true,
+          marketingEmails: false,
+          pushNotifications: true,
+          emailNotifications: false,
+          smsNotifications: false,
+        },
+        accessibilitySettings: profileData.accessibilitySettings || {
+          fontSize: 'medium',
+          highContrast: false,
+          reduceMotion: false,
+          screenReader: false,
+          voiceOver: false,
+          hapticFeedback: true,
+          colorBlindSupport: false,
+        },
+        appSettings: profileData.appSettings || {
+          theme: 'system',
+          language: 'en',
+          units: 'metric',
+          currency: 'USD',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          autoSync: true,
+          offlineMode: false,
+          cacheSize: 'medium',
+        },
+        profileCompleteness: this.calculateCompletionPercentage({
+          demographics: updatedProfile.demographics,
+          healthConditions: updatedProfile.healthConditions,
+          allergiesAndSensitivities: updatedProfile.allergiesAndSensitivities,
+          healthGoals: updatedProfile.healthGoals,
+          privacySettings: updatedProfile.privacySettings,
+        } as any),
+        profileCompleteness: 0, // Will be calculated below
+        lastActiveAt: new Date().toISOString(),
       };
+
+      // Cache the successful result
+      this.profileCache.set(userId, { profile, timestamp: Date.now() });
 
       return profile;
     } catch (error) {
@@ -195,10 +282,10 @@ export class LocalHealthProfileService {
         exportedAt: new Date().toISOString(),
         profileVersion: profile.version,
         demographics: profile.demographics,
-        conditions: profile.conditions,
-        allergies: profile.allergies,
-        goals: profile.goals,
-        privacy: profile.privacy,
+        healthConditions: profile.healthConditions,
+        allergiesAndSensitivities: profile.allergiesAndSensitivities,
+        healthGoals: profile.healthGoals,
+        privacySettings: profile.privacySettings,
         metadata: {
           createdAt: new Date(profile.createdAt).toISOString(),
           updatedAt: new Date(profile.updatedAt).toISOString(),
@@ -220,15 +307,15 @@ export class LocalHealthProfileService {
       ageRange: profile.demographics?.ageRange, // "25-35", not exact age
       biologicalSex: profile.demographics?.biologicalSex, // "male"/"female"
       pregnancyStatus: profile.demographics?.pregnancyStatus, // "not_pregnant"
-      conditions: profile.conditions?.conditions?.filter(c => 
+      conditions: profile.healthConditions?.conditions?.filter((c: any) => 
         typeof c === 'string' && c.length > 0
       ), // ["diabetes", "hypertension"] - general categories only
-      allergies: profile.allergies?.substances?.filter(a => 
+      allergies: profile.allergiesAndSensitivities?.allergies?.filter((a: any) => 
         typeof a === 'string' && a.length > 0
       ), // ["penicillin", "shellfish"] - common allergens only
       goals: {
-        primary: profile.goals?.primary, // "weight_loss"
-        secondary: profile.goals?.secondary, // ["energy", "sleep"]
+        primary: profile.healthGoals?.primary, // "weight_loss"
+        secondary: profile.healthGoals?.secondary, // ["energy", "sleep"]
       },
       // NEVER SEND: exact age, names, addresses, specific medical history, dosages
     };
@@ -240,7 +327,7 @@ export class LocalHealthProfileService {
   async hasAIConsent(userId: string): Promise<boolean> {
     try {
       const profile = await this.getHealthProfile(userId);
-      return profile?.privacy?.aiAnalysisOptIn === true;
+      return profile?.privacySettings?.aiAnalysisOptIn === true;
     } catch (error) {
       console.error('❌ Failed to check AI consent:', error);
       return false; // Default to no consent for safety
@@ -256,8 +343,8 @@ export class LocalHealthProfileService {
       
       if (profile) {
         await this.saveHealthProfile(userId, {
-          privacy: {
-            ...profile.privacy,
+          privacySettings: {
+            ...profile.privacySettings,
             aiAnalysisOptIn: hasConsent,
           },
         });
@@ -324,7 +411,7 @@ export class LocalHealthProfileService {
 
   private isProfileComplete(profile: Partial<HealthProfile>): boolean {
     const hasBasicDemographics = profile.demographics?.ageRange && profile.demographics?.biologicalSex;
-    const hasPrivacySettings = profile.privacy !== undefined;
+    const hasPrivacySettings = profile.privacySettings !== undefined;
     
     // Minimum requirements for complete profile
     return !!(hasBasicDemographics && hasPrivacySettings);
@@ -335,10 +422,10 @@ export class LocalHealthProfileService {
     const total = 5; // Total sections
 
     if (profile.demographics?.ageRange && profile.demographics?.biologicalSex) completed++;
-    if (profile.conditions?.conditions && profile.conditions.conditions.length > 0) completed++;
-    if (profile.allergies?.substances && profile.allergies.substances.length > 0) completed++;
-    if (profile.goals?.primary) completed++;
-    if (profile.privacy) completed++;
+    if (profile.healthConditions?.conditions && profile.healthConditions.conditions.length > 0) completed++;
+    if (profile.allergiesAndSensitivities?.allergies && profile.allergiesAndSensitivities.allergies.length > 0) completed++;
+    if (profile.healthGoals?.primary) completed++;
+    if (profile.privacySettings) completed++;
 
     return Math.round((completed / total) * 100);
   }

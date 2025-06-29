@@ -1,12 +1,12 @@
 // src/config/index.ts
+// Re-export commonly used configuration values for convenience
+// Use lazy evaluation to avoid initialization issues
+import { config } from './environment';
+
 export { config, envHelpers, type Environment } from './environment';
 export { developmentConfig } from './environments/development';
 export { stagingConfig } from './environments/staging';
 export { productionConfig } from './environments/production';
-
-// Re-export commonly used configuration values for convenience
-// Use lazy evaluation to avoid initialization issues
-import { config } from './environment';
 
 export const supabaseUrl = config.supabaseUrl;
 export const supabaseAnonKey = config.supabaseAnonKey;

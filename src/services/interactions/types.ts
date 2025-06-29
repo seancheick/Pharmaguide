@@ -272,11 +272,11 @@ export interface CumulativeDosageCheck {
   substance: string;
   totalDailyAmount: number;
   unit: string;
-  sources: Array<{
+  sources: {
     source: string;
     amount: number;
     timing?: string;
-  }>;
+  }[];
   safetyThreshold: {
     upperLimit: number;
     unit: string;

@@ -3,6 +3,7 @@
 // Based on FDA Boxed Warnings, NIH Guidelines, and Clinical Evidence
 
 import { interactionService } from '../database';
+import { transformDbToCriticalInteractionRule } from '../../utils/databaseTransforms';
 import type {
   CriticalInteractionRule as DBCriticalInteractionRule,
   NutrientLimit as DBNutrientLimit,
@@ -121,22 +122,26 @@ export class RuleBasedEngine {
    * Convert database rule to internal format
    */
   private convertDBRuleToInternal(
-    dbRule: DBCriticalInteractionRule
+    dbRule: any // Raw database result with snake_case
   ): CriticalInteractionRule {
+    // Use transformation utility to handle snake_case → camelCase conversion
+    const transformedRule = transformDbToCriticalInteractionRule(dbRule);
+    
+    // Convert to internal snake_case format expected by this engine
     return {
-      id: dbRule.id,
-      item1_type: dbRule.item1Type as 'medication' | 'supplement' | 'food',
-      item1_identifier: dbRule.item1Identifier,
-      item2_type: dbRule.item2Type as 'medication' | 'supplement' | 'food',
-      item2_identifier: dbRule.item2Identifier,
-      severity: dbRule.severity,
-      mechanism: dbRule.mechanism,
-      clinical_significance: dbRule.clinicalSignificance,
-      recommendation: dbRule.recommendation,
-      contraindicated: dbRule.contraindicated,
-      monitoring_required: dbRule.monitoringRequired,
-      source: dbRule.source as 'FDA' | 'NIH' | 'Clinical',
-      evidence_quality: dbRule.evidenceQuality,
+      id: transformedRule.id,
+      item1_type: transformedRule.item1Type as 'medication' | 'supplement' | 'food',
+      item1_identifier: transformedRule.item1Identifier,
+      item2_type: transformedRule.item2Type as 'medication' | 'supplement' | 'food',
+      item2_identifier: transformedRule.item2Identifier,
+      severity: transformedRule.severity,
+      mechanism: transformedRule.mechanism,
+      clinical_significance: transformedRule.clinicalSignificance,
+      recommendation: transformedRule.recommendation,
+      contraindicated: transformedRule.contraindicated,
+      monitoring_required: transformedRule.monitoringRequired,
+      source: transformedRule.source as 'FDA' | 'NIH' | 'Clinical',
+      evidence_quality: transformedRule.evidenceQuality,
     };
   }
 

@@ -3,18 +3,18 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Platform } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { voiceNavigationService } from '../services/accessibility/voiceNavigationService';
-import { useAccessibility } from './useAccessibility';
 import { logger } from '../services/monitoring/logger';
+import { useAccessibility } from './useAccessibility';
 
 interface VoiceNavigationHookOptions {
   enableAutoStart?: boolean;
-  customCommands?: Array<{
+  customCommands?: {
     id: string;
     phrases: string[];
     action: () => void | Promise<void>;
     description: string;
     category?: 'navigation' | 'action' | 'information' | 'accessibility';
-  }>;
+  }[];
   onCommandExecuted?: (commandId: string, transcript: string) => void;
   onError?: (error: Error) => void;
 }

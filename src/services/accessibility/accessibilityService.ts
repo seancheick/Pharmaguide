@@ -45,7 +45,7 @@ class AccessibilityService {
     isInvertColorsEnabled: false,
     prefersCrossFadeTransitions: false,
   };
-  private listeners: Array<(config: AccessibilityConfig) => void> = [];
+  private listeners: ((config: AccessibilityConfig) => void)[] = [];
 
   constructor() {
     this.storage = new MMKV({
@@ -70,16 +70,15 @@ class AccessibilityService {
       // Apply current configuration
       this.applyConfiguration();
 
-      logger.info('accessibility', 'Accessibility service initialized', {
-        config: this.config,
-        state: this.state,
-      });
-    } catch (error) {
-      logger.error(
-        'accessibility',
-        'Failed to initialize accessibility service',
-        error
+      logger.debug(
+        'ui',
+        'Accessibility service initialized',
+        this.config
       );
+    } catch (error) {
+      logger.warn('ui', 'Failed to initialize accessibility service', {
+        error,
+      });
     }
   }
 
@@ -87,7 +86,7 @@ class AccessibilityService {
    * Get current accessibility configuration
    */
   getConfig(): AccessibilityConfig {
-    return { ...this.config };
+    return this.config;
   }
 
   /**
@@ -99,10 +98,7 @@ class AccessibilityService {
     this.applyConfiguration();
     this.notifyListeners();
 
-    logger.info('accessibility', 'Accessibility configuration updated', {
-      updates,
-      newConfig: this.config,
-    });
+    logger.debug('ui', 'Accessibility config updated', this.config);
   }
 
   /**
@@ -274,14 +270,17 @@ class AccessibilityService {
         AccessibilityInfo.announceForAccessibility(message);
       }
 
-      logger.debug('accessibility', 'Screen reader announcement', {
+      logger.debug('ui', 'Screen reader announcement', {
         message,
         priority,
+        timestamp: new Date().toISOString(),
       });
     } catch (error) {
-      logger.warn('accessibility', 'Failed to announce for screen reader', {
+      logger.warn('ui', 'Failed to announce for screen reader', {
         error,
-      }
+      });
+    }
+  }
 
   /**
    * Generate semantic description for complex interactions
@@ -431,8 +430,6 @@ class AccessibilityService {
       accessibilityLabel: label,
       accessibilityHint: hint,
     };
-  });
-    }
   }
 
   /**
@@ -461,12 +458,12 @@ class AccessibilityService {
       }
 
       logger.debug(
-        'accessibility',
+        'ui',
         'System accessibility settings detected',
         this.state
       );
     } catch (error) {
-      logger.warn('accessibility', 'Failed to detect system settings', {
+      logger.warn('ui', 'Failed to detect system settings', {
         error,
       });
     }
@@ -479,8 +476,9 @@ class AccessibilityService {
     // Listen for screen reader changes
     AccessibilityInfo.addEventListener('screenReaderChanged', isEnabled => {
       this.state.isScreenReaderEnabled = isEnabled;
-      logger.info('accessibility', 'Screen reader state changed', {
+      logger.info('ui', 'Screen reader state changed', {
         isEnabled,
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -488,42 +486,41 @@ class AccessibilityService {
     if (Platform.OS === 'ios') {
       AccessibilityInfo.addEventListener('reduceMotionChanged', isEnabled => {
         this.state.isReduceMotionEnabled = isEnabled;
-        logger.info('accessibility', 'Reduce motion state changed', {
+        logger.info('ui', 'Reduce motion state changed', {
           isEnabled,
+          timestamp: new Date().toISOString(),
         });
       });
 
       AccessibilityInfo.addEventListener('boldTextChanged', isEnabled => {
         this.state.isBoldTextEnabled = isEnabled;
-        logger.info('accessibility', 'Bold text state changed', { isEnabled });
+        logger.info('ui', 'Bold text state changed', { isEnabled });
       });
     }
   }
 
   /**
-   * Apply current configuration
+   * Apply accessibility configuration
    */
   private applyConfiguration(): void {
-    // Apply font size changes
+    // Apply large text setting
     if (this.config.enableLargeText) {
-      // This would typically involve updating a theme provider
-      logger.debug('accessibility', 'Large text enabled');
+      logger.debug('ui', 'Large text enabled');
     }
 
-    // Apply high contrast
+    // Apply high contrast setting
     if (this.config.enableHighContrast) {
-      this.config.colorScheme = 'high-contrast';
-      logger.debug('accessibility', 'High contrast enabled');
+      logger.debug('ui', 'High contrast enabled');
     }
 
-    // Apply reduced motion
+    // Apply reduced motion setting
     if (this.config.enableReducedMotion) {
-      logger.debug('accessibility', 'Reduced motion enabled');
+      logger.debug('ui', 'Reduced motion enabled');
     }
   }
 
   /**
-   * Calculate contrast ratio between two colors
+   * Calculate color contrast ratio
    */
   private calculateContrastRatio(color1: string, color2: string): number {
     const luminance1 = this.getLuminance(color1);
@@ -536,7 +533,7 @@ class AccessibilityService {
   }
 
   /**
-   * Get luminance of a color
+   * Calculate relative luminance of a color
    */
   private getLuminance(color: string): number {
     // Convert hex to RGB
@@ -546,12 +543,30 @@ class AccessibilityService {
     const b = parseInt(hex.substr(4, 2), 16) / 255;
 
     // Apply gamma correction
-    const rs = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-    const gs = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-    const bs = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+    const rGamma = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+    const gGamma = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+    const bGamma = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
 
-    // Calculate luminance
-    return 0.2126 * rs + 0.7152 * gs + 0.0722 * bs;
+    return 0.2126 * rGamma + 0.7152 * gGamma + 0.0722 * bGamma;
+  }
+
+  /**
+   * Get default accessibility configuration
+   */
+  private getDefaultConfig(): AccessibilityConfig {
+    return {
+      enableScreenReader: false,
+      enableHighContrast: false,
+      enableLargeText: false,
+      enableReducedMotion: false,
+      enableKeyboardNavigation: true,
+      enableVoiceNavigation: false,
+      enableSemanticDescriptions: true,
+      enableContextualAnnouncements: true,
+      fontSize: 'medium',
+      colorScheme: 'light',
+      voiceNavigationLanguage: 'en',
+    };
   }
 
   /**
@@ -559,24 +574,15 @@ class AccessibilityService {
    */
   private loadConfig(): AccessibilityConfig {
     try {
-      const stored = this.storage.getString('config');
-      if (stored) {
-        return JSON.parse(stored);
+      const saved = this.storage.getString('config');
+      if (saved) {
+        return JSON.parse(saved);
       }
     } catch (error) {
-      logger.warn('accessibility', 'Failed to load config', { error });
+      logger.warn('ui', 'Failed to load config', { error });
     }
 
-    // Return default configuration
-    return {
-      enableScreenReader: false,
-      enableHighContrast: false,
-      enableLargeText: false,
-      enableReducedMotion: false,
-      enableKeyboardNavigation: true,
-      fontSize: 'medium',
-      colorScheme: 'light',
-    };
+    return this.getDefaultConfig();
   }
 
   /**
@@ -586,19 +592,19 @@ class AccessibilityService {
     try {
       this.storage.set('config', JSON.stringify(this.config));
     } catch (error) {
-      logger.error('accessibility', 'Failed to save config', error);
+      logger.error('ui', 'Failed to save config', error);
     }
   }
 
   /**
-   * Notify listeners of configuration changes
+   * Notify all listeners of configuration changes
    */
   private notifyListeners(): void {
     for (const listener of this.listeners) {
       try {
         listener(this.config);
       } catch (error) {
-        logger.warn('accessibility', 'Listener notification failed', { error });
+        logger.warn('ui', 'Listener notification failed', { error: error as Error });
       }
     }
   }

@@ -248,10 +248,10 @@ export interface AccessibleComponentProps {
     busy?: boolean;
     expanded?: boolean;
   };
-  accessibilityActions?: Array<{
+  accessibilityActions?: {
     name: string;
     label?: string;
-  }>;
+  }[];
   onAccessibilityAction?: (event: {
     nativeEvent: { actionName: string };
   }) => void;

@@ -13,12 +13,12 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// Load environment variables
+import dotenv from 'dotenv';
+
 // ES module compatibility
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-
-// Load environment variables
-import dotenv from 'dotenv';
 dotenv.config();
 
 class SimpleAITester {

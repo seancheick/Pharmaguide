@@ -4,6 +4,7 @@
 export { useAuth } from './useAuth';
 export { useAuthMode } from './useAuthMode';
 export { useHealthProfile } from './useHealthProfile';
+export { useSetupProgress } from './useSetupProgress';
 
 // Navigation & Routing
 export { useNavigationGuard } from './useNavigationGuard';
@@ -27,6 +28,10 @@ export {
   useSimpleVisibilityTracking,
   useVisibilityPreloader,
 } from './useVisibilityTracking';
+export {
+  usePerformanceMonitoring,
+  useOperationMonitoring,
+} from './usePerformanceMonitoring';
 
 // Device & Hardware
 export { useCameraLifecycle } from './useCameraLifecycle';

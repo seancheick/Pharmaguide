@@ -102,7 +102,7 @@ export class BarcodeSanitizer {
       }
 
       // Step 3: Basic sanitization - remove common formatting characters
-      let sanitized = barcode
+      const sanitized = barcode
         .replace(/[\s\-_]/g, '') // Remove spaces, hyphens, underscores
         .replace(/[^\w]/g, '') // Remove non-word characters
         .trim()

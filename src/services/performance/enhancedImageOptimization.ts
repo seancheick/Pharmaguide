@@ -1,9 +1,9 @@
 // src/services/performance/enhancedImageOptimization.ts
 import * as FileSystem from 'expo-file-system';
 import { Image } from 'expo-image';
-import { imageCacheService } from './imageCacheService';
 import { logger } from '../monitoring/logger';
 import { performanceMonitor } from '../monitoring/performanceMonitor';
+import { imageCacheService } from './imageCacheService';
 
 interface OptimizedImageSizes {
   thumbnail: string;    // 150x150 - for lists and previews

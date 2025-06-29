@@ -12,6 +12,7 @@ import type {
   ScanResult,
   DatabaseScanHistory,
   DatabaseUserProfile,
+  CriticalInteractionRule,
 } from '../types/database';
 
 /**
@@ -175,7 +176,7 @@ export function transformDbToProduct(dbProduct: DatabaseProduct): Product {
     id: dbProduct.id,
     name: dbProduct.name,
     brand: dbProduct.brand || '', // Handle null -> string conversion
-    category: (dbProduct.category as any) || 'specialty', // Handle category type conversion
+    category: transformProductCategoryFromDb(dbProduct.category) as any, // Handle UPPERCASE to lowercase conversion
     barcode: dbProduct.barcode || undefined, // Handle null -> undefined conversion
 
     // Map active_ingredients to ingredients array
@@ -216,7 +217,7 @@ export function transformProductToDb(
     generic_name: null, // Not provided by app interface
     brand: product.brand || null, // Handle empty string -> null conversion
     manufacturer: null, // Not provided by app interface
-    category: (product.category as string) || null, // Handle category type conversion
+    category: transformProductCategoryToDb(product.category as string), // Handle lowercase to UPPERCASE conversion
     dosage_form:
       product.servingSize !== '1 serving' ? product.servingSize : null, // Map servingSize to dosage_form
     strength: product.dosage || null, // Map dosage to strength
@@ -263,7 +264,7 @@ export function createProductInsertPayload(
     generic_name: null, // Not provided by app interface
     brand: product.brand || null, // Handle empty string -> null conversion
     manufacturer: null, // Not provided by app interface
-    category: (product.category as string) || null, // Handle category type conversion
+    category: transformProductCategoryToDb(product.category as string), // Handle lowercase to UPPERCASE conversion
     dosage_form:
       product.servingSize !== '1 serving' ? product.servingSize : null, // Map servingSize to dosage_form
     strength: product.dosage || null, // Map dosage to strength
@@ -923,4 +924,225 @@ export function sanitizeUserProfile(
   }
 
   return sanitized;
+}
+
+// =====================================================
+// CRITICAL INTERACTION RULE TRANSFORMATIONS
+// =====================================================
+
+/**
+ * Transform database format to CriticalInteractionRule (app format)
+ * Handles snake_case to camelCase conversion for interaction rules
+ */
+export function transformDbToCriticalInteractionRule(
+  dbRule: any
+): CriticalInteractionRule {
+  return {
+    id: dbRule.id,
+    item1Type: dbRule.item1_type, // snake_case → camelCase
+    item1Identifier: dbRule.item1_identifier, // snake_case → camelCase
+    item2Type: dbRule.item2_type, // snake_case → camelCase
+    item2Identifier: dbRule.item2_identifier, // snake_case → camelCase
+    severity: dbRule.severity?.toUpperCase() as 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL', // Ensure uppercase
+    mechanism: dbRule.mechanism,
+    clinicalSignificance: dbRule.clinical_significance, // snake_case → camelCase
+    recommendation: dbRule.recommendation,
+    contraindicated: dbRule.contraindicated,
+    monitoringRequired: dbRule.monitoring_required, // snake_case → camelCase
+    source: dbRule.source?.toUpperCase() as 'FDA' | 'NIH' | 'PUBMED' | 'CLINICAL_STUDY' | 'MANUFACTURER' | 'AI',
+    evidenceQuality: dbRule.evidence_quality?.toUpperCase() as 'A' | 'B' | 'C' | 'D' | 'EXPERT_OPINION', // snake_case → camelCase
+    sources: dbRule.sources || [],
+  };
+}
+
+/**
+ * Transform CriticalInteractionRule (app format) to database format
+ * Handles camelCase to snake_case conversion for database storage
+ */
+export function transformCriticalInteractionRuleToDb(
+  rule: Partial<CriticalInteractionRule>
+): any {
+  return {
+    id: rule.id,
+    item1_type: rule.item1Type, // camelCase → snake_case
+    item1_identifier: rule.item1Identifier, // camelCase → snake_case
+    item2_type: rule.item2Type, // camelCase → snake_case
+    item2_identifier: rule.item2Identifier, // camelCase → snake_case
+    severity: rule.severity?.toUpperCase(), // Ensure uppercase for enum
+    mechanism: rule.mechanism,
+    clinical_significance: rule.clinicalSignificance, // camelCase → snake_case
+    recommendation: rule.recommendation,
+    contraindicated: rule.contraindicated,
+    monitoring_required: rule.monitoringRequired, // camelCase → snake_case
+    source: rule.source?.toUpperCase(),
+    evidence_quality: rule.evidenceQuality?.toUpperCase(), // camelCase → snake_case
+    sources: rule.sources,
+  };
+}
+
+/**
+ * Transform array of database interaction rules to app format
+ */
+export function transformDbArrayToCriticalInteractionRule(
+  dbRules: any[]
+): CriticalInteractionRule[] {
+  return dbRules.map(transformDbToCriticalInteractionRule);
+}
+
+// =====================================================
+// USER PREFERENCES TRANSFORMATIONS
+// =====================================================
+
+/**
+ * Transform database format to UserPreferences (app format)
+ * Handles the complete structural mismatch between database and app preferences
+ */
+export function transformDbToUserPreferences(dbPrefs: any): any {
+  return {
+    // Map flat database fields to nested app structure
+    ai_response_style: 'detailed' as const, // Default since not in database
+    budget_range: 'mid' as const, // Default since not in database
+    primary_focus: 'safety' as const, // Default since not in database
+    
+    // Map database notification fields to nested structure
+    notifications: {
+      push_enabled: dbPrefs.push_notifications ?? true,
+      email_enabled: dbPrefs.email_notifications ?? false,
+      reminder_frequency: 'daily' as const, // Default
+    },
+    
+    // Map other database fields
+    theme: dbPrefs.theme || 'system',
+    language: dbPrefs.language || 'en',
+    timezone: dbPrefs.timezone || 'UTC',
+    privacy_level: dbPrefs.privacy_level || 'standard',
+    data_sharing_consent: dbPrefs.data_sharing_consent ?? false,
+    
+    // Add app-specific fields not in database
+    units: 'metric' as const,
+    currency: 'USD',
+    accessibility: {
+      high_contrast: false,
+      large_text: false,
+      voice_over: false,
+    },
+  };
+}
+
+/**
+ * Transform UserPreferences (app format) to database format
+ * Handles the complete structural mismatch between app and database preferences
+ */
+export function transformUserPreferencesToDb(prefs: any): any {
+  return {
+    // Flatten nested app structure to database fields
+    theme: prefs.theme || 'system',
+    notifications_enabled: prefs.notifications?.push_enabled ?? true,
+    email_notifications: prefs.notifications?.email_enabled ?? false,
+    push_notifications: prefs.notifications?.push_enabled ?? true,
+    language: prefs.language || 'en',
+    timezone: prefs.timezone || 'UTC',
+    privacy_level: prefs.privacy_level || 'standard',
+    data_sharing_consent: prefs.data_sharing_consent ?? false,
+    
+    // Note: AI preferences not stored in database yet
+    // Could be added in future migration
+  };
+}
+
+/**
+ * Create database insert payload from UserPreferences
+ */
+export function createUserPreferencesInsertPayload(
+  prefs: any,
+  userId: string,
+  timestamp: string
+): any {
+  const dbPrefs = transformUserPreferencesToDb(prefs);
+  
+  return {
+    user_id: userId,
+    ...dbPrefs,
+    created_at: timestamp,
+    updated_at: timestamp,
+  };
+}
+
+/**
+ * Create database update payload from UserPreferences
+ */
+export function createUserPreferencesUpdatePayload(
+  updates: any,
+  timestamp: string
+): any {
+  const dbUpdates = transformUserPreferencesToDb(updates);
+  
+  return {
+    ...dbUpdates,
+    updated_at: timestamp,
+  };
+}
+
+// =====================================================
+// PRODUCT CATEGORY ENUM TRANSFORMATION
+// =====================================================
+
+/**
+ * Transform product category between database (UPPERCASE) and app (lowercase)
+ */
+export function transformProductCategoryToDb(category: string): string {
+  return category?.toUpperCase() || 'OTHER';
+}
+
+/**
+ * Transform product category from database (UPPERCASE) to app (lowercase)
+ */
+export function transformProductCategoryFromDb(category: string): string {
+  return category?.toLowerCase() || 'other';
+}
+
+// =====================================================
+// GENERIC CASE TRANSFORMATION UTILITIES
+// =====================================================
+
+/**
+ * Convert camelCase to snake_case
+ */
+export function camelToSnakeCase(str: string): string {
+  return str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+}
+
+/**
+ * Convert snake_case to camelCase
+ */
+export function snakeToCamelCase(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+/**
+ * Transform object keys from camelCase to snake_case
+ */
+export function transformObjectKeysToSnakeCase(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(obj)) {
+    const snakeKey = camelToSnakeCase(key);
+    result[snakeKey] = value;
+  }
+  
+  return result;
+}
+
+/**
+ * Transform object keys from snake_case to camelCase
+ */
+export function transformObjectKeysToCamelCase(obj: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = {};
+  
+  for (const [key, value] of Object.entries(obj)) {
+    const camelKey = snakeToCamelCase(key);
+    result[camelKey] = value;
+  }
+  
+  return result;
 }

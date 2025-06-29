@@ -120,18 +120,9 @@ function createEnvironmentConfig(): EnvironmentConfig {
   const environment = getCurrentEnvironment();
   const envConfig = getEnvironmentSpecificConfig(environment);
 
-  // Get Supabase configuration with fallbacks for backward compatibility
-  const supabaseUrl = getRequiredEnvVar(
-    'EXPO_PUBLIC_SUPABASE_URL',
-    // Fallback to hardcoded value for backward compatibility (will be removed later)
-    'https://myxpwegapxhcodcipyxu.supabase.co'
-  );
-
-  const supabaseAnonKey = getRequiredEnvVar(
-    'EXPO_PUBLIC_SUPABASE_ANON_KEY',
-    // Fallback to hardcoded value for backward compatibility (will be removed later)
-    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15eHB3ZWdhcHhoY29kY2lweXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0ODIyMjEsImV4cCI6MjA2NTA1ODIyMX0.Ik5kKxOfcVF9W155uc3V1LyxAGXYj_AZjiu5IhaGXIo'
-  );
+  // Get Supabase configuration - MUST be provided via environment variables
+  const supabaseUrl = getRequiredEnvVar('EXPO_PUBLIC_SUPABASE_URL');
+  const supabaseAnonKey = getRequiredEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY');
 
   // Validate Supabase URL format
   try {
@@ -165,31 +156,8 @@ try {
   config = createEnvironmentConfig();
 } catch (error) {
   console.error('Failed to create environment configuration:', error);
-  // Fallback configuration
-  config = {
-    supabaseUrl: 'https://myxpwegapxhcodcipyxu.supabase.co',
-    supabaseAnonKey:
-      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15eHB3ZWdhcHhoY29kY2lweXh1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk0ODIyMjEsImV4cCI6MjA2NTA1ODIyMX0.Ik5kKxOfcVF9W155uc3V1LyxAGXYj_AZjiu5IhaGXIo',
-    environment: 'development' as Environment,
-    appName: 'PharmaGuide',
-    appVersion: '1.0.0',
-    enableAnalytics: false,
-    enableCrashReporting: false,
-    enablePerformanceMonitoring: false,
-    enableDebugMode: true,
-    enableVerboseLogging: true,
-    enableHotReload: true,
-    enableReduxDevTools: true,
-    enableNetworkInspector: true,
-    apiTimeout: 30000,
-    maxRetries: 3,
-    aiResponseTimeout: 45000,
-    enableAIFallbacks: true,
-    cacheTimeout: 5 * 60 * 1000,
-    enableCachePersistence: true,
-    enableDatabaseLogging: true,
-    connectionTimeout: 10000,
-  };
+  // Re-throw the error - configuration is required for the app to function
+  throw new Error(`Environment configuration failed: ${error.message}`);
 }
 
 export { config };

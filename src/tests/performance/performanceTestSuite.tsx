@@ -59,7 +59,7 @@ describe('Performance Test Suite', () => {
     it('should handle rapid re-renders efficiently', async () => {
       const { EnhancedValidatedInput } = require('../../components/forms/EnhancedValidatedInput');
       let value = '';
-      let setValue = (newValue: string) => { value = newValue; };
+      const setValue = (newValue: string) => { value = newValue; };
 
       const { rerender } = renderWithProviders(
         <EnhancedValidatedInput

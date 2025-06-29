@@ -37,13 +37,15 @@ export class SecureStorage {
   private readonly DB_NAME = 'pharmaguide_secure.db';
   private readonly MASTER_KEY_ALIAS = 'pharmaguide_master_key';
   private fallbackMode = false;
+  private emptyEntryWarningCount = 0;
+  private readonly MAX_EMPTY_ENTRY_WARNINGS = 5;
 
   /**
    * Initialize secure storage with encryption
    */
   async initialize(): Promise<void> {
     try {
-      console.log('🔐 Initializing HIPAA-compliant secure storage...');
+      // Initializing HIPAA-compliant secure storage
 
       try {
         // Initialize SQLite database with WAL mode
@@ -61,7 +63,7 @@ export class SecureStorage {
         // Create encrypted tables
         await this.createTables();
 
-        console.log('✅ SQLite database initialized successfully');
+        // SQLite database initialized successfully
       } catch (sqliteError) {
         console.warn(
           '⚠️ SQLite initialization failed, using fallback mode:',
@@ -77,6 +79,9 @@ export class SecureStorage {
       // Clean up any corrupted data entries (only in SQLite mode)
       if (!this.fallbackMode) {
         await this.cleanupCorruptedData();
+        await this.cleanupEmptyEntries();
+        // Reset warning counter after cleanup
+        this.emptyEntryWarningCount = 0;
       }
 
       if (this.fallbackMode) {
@@ -113,6 +118,28 @@ export class SecureStorage {
       }
     } catch (error) {
       console.warn('Failed to cleanup corrupted data:', error);
+    }
+  }
+
+  /**
+   * Clean up empty entries that cause excessive logging
+   */
+  private async cleanupEmptyEntries(): Promise<void> {
+    if (this.fallbackMode || !this.db) {
+      return;
+    }
+
+    try {
+      // Remove entries with empty or whitespace-only encrypted_data
+      const result = await this.db.runAsync(
+        'DELETE FROM health_data WHERE encrypted_data IS NULL OR TRIM(encrypted_data) = "" OR encrypted_data = "null"'
+      );
+
+      if (result.changes > 0) {
+        console.log(`🧹 Cleaned up ${result.changes} empty database entries`);
+      }
+    } catch (error) {
+      console.warn('Failed to cleanup empty entries:', error);
     }
   }
 
@@ -476,7 +503,14 @@ export class SecureStorage {
           try {
             // Check if encryptedData exists and is valid
             if (!row.encryptedData) {
-              console.warn('No encrypted data found, skipping entry');
+              // Limit warning logs to prevent console flooding
+              if (this.emptyEntryWarningCount < this.MAX_EMPTY_ENTRY_WARNINGS) {
+                console.warn('No encrypted data found, skipping entry');
+                this.emptyEntryWarningCount++;
+                if (this.emptyEntryWarningCount === this.MAX_EMPTY_ENTRY_WARNINGS) {
+                  console.warn(`⚠️ Suppressing further empty entry warnings (found ${this.MAX_EMPTY_ENTRY_WARNINGS}+ empty entries)`);
+                }
+              }
               continue;
             }
 

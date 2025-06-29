@@ -299,7 +299,7 @@ class NetworkCacheService {
     if (currentSize >= this.config.maxCacheSize) {
       // Remove oldest entries (simple LRU)
       const keys = this.storage.getAllKeys();
-      const entries: Array<{ key: string; timestamp: number }> = [];
+      const entries: { key: string; timestamp: number }[] = [];
 
       for (const key of keys) {
         try {

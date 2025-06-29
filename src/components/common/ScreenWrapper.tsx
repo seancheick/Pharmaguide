@@ -1,12 +1,12 @@
 // src/components/common/ScreenWrapper.tsx
 import React from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { useNetworkState } from '../../hooks/useNetworkState';
+import { COLORS } from '../../constants';
 import { ErrorBoundary } from './ErrorBoundary';
 import { ScreenErrorBoundary } from './ScreenErrorBoundary';
 import { LoadingScreen } from './LoadingScreen';
 import { ErrorFallback, NetworkErrorFallback } from './ErrorFallback';
-import { useNetworkState } from '../../hooks/useNetworkState';
-import { COLORS } from '../../constants';
 
 interface ScreenWrapperProps {
   children: React.ReactNode;

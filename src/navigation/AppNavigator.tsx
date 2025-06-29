@@ -11,7 +11,6 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../hooks/useAuth';
-import { AuthNavigator } from './AuthNavigator';
 import { LoadingScreen } from '../components/common/LoadingScreen';
 import {
   navigationStateManager,
@@ -28,12 +27,6 @@ import { MyStackScreen } from '../screens/stack/MyStackScreen';
 import { AIScreen } from '../screens/ai/AIScreen';
 import {
   ProfileScreen,
-  HealthProfileSetupScreen,
-  DemographicsScreen,
-  MedicationsScreen,
-  HealthGoalsScreen,
-  HealthConditionsScreen,
-  AllergiesScreen,
   SettingsScreen,
   DataQualityScreen,
   SupportScreen,
@@ -55,8 +48,11 @@ import {
   CreditsScreen,
   LicensesScreen,
 } from '../screens/profile';
+import { NewHealthProfileSetupScreen } from '../screens/profile/NewHealthProfileSetupScreen';
+import { HealthProfileBridge } from '../components/profile/HealthProfileBridge';
 import { COLORS } from '../constants';
 import { RootStackParamList, MainTabParamList } from '../types/navigation';
+import { AuthNavigator } from './AuthNavigator';
 
 const Stack = createStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -192,7 +188,11 @@ export const AppNavigator = () => {
         <Stack.Navigator>
           <Stack.Screen
             name="MainTabs"
-            component={MainTabs}
+            component={() => (
+              <HealthProfileBridge>
+                <MainTabs />
+              </HealthProfileBridge>
+            )}
             options={{ headerShown: false }}
           />
           <Stack.Screen
@@ -228,53 +228,14 @@ export const AppNavigator = () => {
             }}
           />
           <Stack.Screen
-            name="HealthProfileSetup"
-            component={HealthProfileSetupScreen}
+            name="NewHealthProfileSetup"
+            component={NewHealthProfileSetupScreen}
             options={{
               headerShown: false,
               title: 'Health Profile Setup',
             }}
           />
-          <Stack.Screen
-            name="DemographicsScreen"
-            component={DemographicsScreen}
-            options={{
-              headerShown: false,
-              title: 'Demographics',
-            }}
-          />
-          <Stack.Screen
-            name="MedicationsScreen"
-            component={MedicationsScreen}
-            options={{
-              headerShown: false,
-              title: 'Medications & Supplements',
-            }}
-          />
-          <Stack.Screen
-            name="HealthGoalsScreen"
-            component={HealthGoalsScreen}
-            options={{
-              headerShown: false,
-              title: 'Health Goals',
-            }}
-          />
-          <Stack.Screen
-            name="HealthConditionsScreen"
-            component={HealthConditionsScreen}
-            options={{
-              headerShown: false,
-              title: 'Health Conditions',
-            }}
-          />
-          <Stack.Screen
-            name="AllergiesScreen"
-            component={AllergiesScreen}
-            options={{
-              headerShown: false,
-              title: 'Allergies',
-            }}
-          />
+          {/* Old health profile screens removed - now using NewHealthProfileSetup */}
           <Stack.Screen
             name="SettingsScreen"
             component={SettingsScreen}

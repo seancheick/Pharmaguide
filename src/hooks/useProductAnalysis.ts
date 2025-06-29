@@ -1,9 +1,11 @@
 // src/hooks/useProductAnalysis.ts
+// 🚀 ENHANCED: Unified product analysis with improved scan handling
+
 import { useState, useEffect, useCallback } from 'react';
 import { Alert } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { useStackStore } from '../stores/stackStore';
+import { unifiedScanService } from '../services/scanService';
 import { gamificationService } from '../services/gamification/gamificationService';
 import type { Product, ProductAnalysis } from '../types';
 
@@ -29,19 +31,19 @@ export const useProductAnalysis = ({
   const { addToStack } = useStackStore();
   const navigation = useNavigation();
 
-  // Save to recent scans on mount
+  // 🎯 Save to unified scan service on mount (only for valid products)
   useEffect(() => {
-    if (product && analysis) {
-      saveToRecentScans(product, analysis);
-      updateGamification();
+    if (product && analysis && product.name !== 'Product Not Found') {
+      saveToUnifiedService(product, analysis);
     }
   }, [product, analysis]);
 
-  // Set loading state based on analysis
+  // 🎯 Set loading state based on analysis
   useEffect(() => {
     setLoading(!analysis);
   }, [analysis]);
 
+  //  Determine evidence level
   const determineEvidenceLevel = useCallback(
     (anal: ProductAnalysis): 'A' | 'B' | 'C' | 'D' => {
       if (!anal.stackInteraction || !anal.stackInteraction.interactions) {
@@ -70,64 +72,24 @@ export const useProductAnalysis = ({
     []
   );
 
-  const saveToRecentScans = useCallback(
+  // 🎯 Save to unified scan service
+  const saveToUnifiedService = useCallback(
     async (prod: Product, anal: ProductAnalysis) => {
       try {
-        // Use the shared storage key for recent scans
-        const { STORAGE_KEYS } = await import('../constants/storage');
-        const existingScans = await AsyncStorage.getItem(
-          STORAGE_KEYS.RECENT_SCANS
+        await unifiedScanService.saveScan(
+          prod,
+          anal,
+          'barcode' // Default scan type, could be made configurable
         );
-        const scans = existingScans ? JSON.parse(existingScans) : [];
-
-        const evidenceLevel = determineEvidenceLevel(anal);
-
-        const newScan = {
-          id: Date.now().toString(),
-          name: prod.name,
-          brand: prod.brand,
-          imageUrl: prod.imageUrl,
-          score: anal.overallScore,
-          hasInteraction: anal.stackInteraction
-            ? anal.stackInteraction.overallRiskLevel !== 'NONE'
-            : false,
-          evidence: evidenceLevel,
-          scannedAt: new Date().toISOString(),
-        };
-
-        const updatedScans = [newScan, ...scans].slice(0, 50);
-        await AsyncStorage.setItem(
-          STORAGE_KEYS.RECENT_SCANS,
-          JSON.stringify(updatedScans)
-        );
-        console.log('Scan saved to recent scans:', prod.name);
+        // Scan saved successfully - logging removed for production
       } catch (error) {
-        console.error('Error saving recent scan:', error);
+        console.error('❌ Error saving to unified service:', error);
       }
     },
-    [determineEvidenceLevel]
+    []
   );
 
-  const updateGamification = useCallback(async () => {
-    try {
-      await gamificationService.awardPoints('DAILY_SCAN');
-      await gamificationService.updateStreak();
-
-      if (analysis.overallScore >= 70) {
-        await gamificationService.awardPoints('SAFE_PRODUCT');
-      }
-
-      if (
-        analysis.stackInteraction &&
-        analysis.stackInteraction.overallRiskLevel !== 'NONE'
-      ) {
-        await gamificationService.awardPoints('INTERACTION_FOUND');
-      }
-    } catch (error) {
-      console.error('Error updating gamification:', error);
-    }
-  }, [analysis]);
-
+  // 🎯 Add to stack handler
   const handleAddToStack = useCallback(async () => {
     if (analysis.stackInteraction?.overallRiskLevel === 'CRITICAL') {
       Alert.alert(
@@ -138,7 +100,7 @@ export const useProductAnalysis = ({
       return;
     }
 
-    // Generate a proper UUID for the item_id instead of using barcode
+    // Generate a proper UUID for the item_id
     const generateUUID = () => {
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(
         /[xy]/g,
@@ -151,7 +113,7 @@ export const useProductAnalysis = ({
     };
 
     const itemToAdd = {
-      item_id: generateUUID(), // Use proper UUID instead of product.id (which might be a barcode)
+      item_id: generateUUID(),
       name: product.name,
       type: 'supplement' as 'medication' | 'supplement',
       dosage: product.dosage || 'As directed',
@@ -180,6 +142,7 @@ export const useProductAnalysis = ({
     }
   }, [product, analysis, addToStack]);
 
+  //  Talk to AI handler
   const handleTalkToAI = useCallback(() => {
     Alert.alert(
       'AI Pharmacist Ready! 🧠',
@@ -189,8 +152,7 @@ export const useProductAnalysis = ({
         {
           text: 'Start Chat',
           onPress: () => {
-            console.log('Navigate to AI chat with product context');
-            // Navigate to AI tab with product context
+            // Navigate to AI chat with product context
             (navigation as any).navigate('MainTabs', {
               screen: 'AI',
               params: {

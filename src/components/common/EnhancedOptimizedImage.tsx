@@ -4,9 +4,9 @@ import { View, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
 import { Image } from 'expo-image';
 import { useNetInfo } from '@react-native-community/netinfo';
 import { COLORS } from '../../constants';
-import { OptimizedIcon } from './OptimizedIcon';
 import { enhancedImageOptimization } from '../../services/performance/enhancedImageOptimization';
 import { logger } from '../../services/monitoring/logger';
+import { OptimizedIcon } from './OptimizedIcon';
 
 interface EnhancedOptimizedImageProps {
   source: { uri: string } | number;

@@ -14,7 +14,7 @@ import {
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { OptimizedIcon } from '../../components/common/OptimizedIcon';
 import { useAuth } from '../../hooks/useAuth';
-import { useHealthProfile } from '../../hooks/useHealthProfile';
+import { useNewHealthProfile } from '../../hooks/useNewHealthProfile';
 import { COLORS, SPACING, TYPOGRAPHY } from '../../constants';
 import {
   PROFILE_SECTIONS,
@@ -43,16 +43,26 @@ export const ProfileScreen = () => {
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   const {
-    completeness,
+    completionPercentage: completeness,
     loading: profileLoading,
     refreshProfile,
-  } = useHealthProfile();
+  } = useNewHealthProfile();
 
-  // Refresh profile when screen comes into focus to sync with HealthProfileSetupScreen
+  // Refresh profile when screen comes into focus to sync with NewHealthProfileSetupScreen
+  // Use a ref to track last refresh time to prevent excessive refreshes
+  const lastRefreshRef = React.useRef(0);
+  const REFRESH_THROTTLE = 5000; // 5 seconds minimum between refreshes
+
   useFocusEffect(
     useCallback(() => {
-      console.log('📋 ProfileScreen - Refreshing profile on focus...');
-      refreshProfile();
+      const now = Date.now();
+      if (now - lastRefreshRef.current > REFRESH_THROTTLE) {
+        console.log('📋 ProfileScreen - Refreshing profile on focus...');
+        lastRefreshRef.current = now;
+        refreshProfile();
+      } else {
+        console.log('📋 ProfileScreen - Skipping refresh (throttled)');
+      }
     }, [refreshProfile])
   );
 
