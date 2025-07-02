@@ -1,3 +1,4 @@
+// src/services/storage/storageHierarchy.ts
 export enum StorageTier {
   SECURE = 'secure',      // PHI, auth tokens
   LOCAL = 'local',        // User preferences, cache

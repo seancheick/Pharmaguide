@@ -140,11 +140,17 @@ export const API_ENDPOINTS = {
   HUGGINGFACE_MODELS: 'https://api-inference.huggingface.co/models',
   OPENFOODFACTS: 'https://world.openfoodfacts.org',
   GROQ: 'https://api.groq.com/openai/v1',
-  PUBMED: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
-  PUBMED_BACKUP: 'https://api.ncbi.nlm.nih.gov/lit/ctxp/v1/pubmed',
-  DSLD: 'https://api.ods.od.nih.gov/dsld/v9',
-  OPENFDA: 'https://api.fda.gov',
   USDA: 'https://api.nal.usda.gov/fdc/v1',
+  FDA: 'https://api.fda.gov',
+  PubMed: 'https://eutils.ncbi.nlm.nih.gov/entrez/eutils',
+  DSLD: 'https://api.ods.od.nih.gov/dsld/v9',
+  OpenFoodFacts: process.env.NODE_ENV === 'development' 
+    ? 'https://world.openfoodfacts.net/api/v2' 
+    : 'https://world.openfoodfacts.org/api/v2',
+  PUBMED_BACKUP: 'https://api.ncbi.nlm.nih.gov/lit/ctxp/v1/pubmed',
+  OPENFDA: 'https://api.fda.gov',
+  RXNORM: 'https://rxnav.nlm.nih.gov/REST',
+  
 };
 
 export const AI_MODELS = {
@@ -1150,3 +1156,4 @@ export type EvidenceLevel = keyof typeof EVIDENCE_LEVELS;
 export type GamificationPoint = keyof typeof GAMIFICATION.POINTS;
 export type GamificationLevel = keyof typeof GAMIFICATION.LEVELS;
 export type GamificationAchievementId = keyof typeof GAMIFICATION.ACHIEVEMENTS;
+

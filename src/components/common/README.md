@@ -1,3 +1,5 @@
+// src/components/common/README.md
+
 # Common Components
 
 This directory contains reusable components used throughout the application.
@@ -5,9 +7,11 @@ This directory contains reusable components used throughout the application.
 ## Components
 
 ### Button
+
 A customizable button component with various styles and states.
 
 **Props:**
+
 - `title: string` - Button text
 - `onPress: () => void` - Press handler
 - `variant: 'primary' | 'secondary' | 'outline'` - Button style
@@ -16,14 +20,17 @@ A customizable button component with various styles and states.
 - `size?: 'small' | 'medium' | 'large'` - Button size
 
 **Usage:**
+
 ```tsx
 <Button title="Save" onPress={handleSave} variant="primary" />
 ```
 
 ### Input
+
 A form input component with validation support.
 
 **Props:**
+
 - `label: string` - Input label
 - `value: string` - Input value
 - `onChangeText: (text: string) => void` - Change handler
@@ -33,10 +40,11 @@ A form input component with validation support.
 - `keyboardType?: KeyboardTypeOptions` - Keyboard type
 
 **Usage:**
+
 ```tsx
-<Input 
-  label="Email" 
-  value={email} 
+<Input
+  label="Email"
+  value={email}
   onChangeText={setEmail}
   error={emailError}
   keyboardType="email-address"
@@ -44,9 +52,11 @@ A form input component with validation support.
 ```
 
 ### ValidatedInput
+
 An enhanced input component with built-in validation.
 
 **Props:**
+
 - `label: string` - Input label
 - `value: string` - Input value
 - `onChangeText: (text: string) => void` - Change handler
@@ -54,6 +64,7 @@ An enhanced input component with built-in validation.
 - `onValidationChange?: (isValid: boolean) => void` - Validation callback
 
 **Usage:**
+
 ```tsx
 <ValidatedInput
   label="Password"
@@ -61,32 +72,42 @@ An enhanced input component with built-in validation.
   onChangeText={setPassword}
   validationRules={[
     { type: 'required', message: 'Password is required' },
-    { type: 'minLength', value: 8, message: 'Password must be at least 8 characters' }
+    {
+      type: 'minLength',
+      value: 8,
+      message: 'Password must be at least 8 characters',
+    },
   ]}
 />
 ```
 
 ### LoadingScreen
+
 A full-screen loading component with customizable content.
 
 **Props:**
+
 - `message?: string` - Loading message
 - `showSpinner?: boolean` - Show/hide spinner
 - `backgroundColor?: string` - Background color
 
 **Usage:**
+
 ```tsx
 <LoadingScreen message="Loading your profile..." />
 ```
 
 ### ErrorBoundary
+
 A React error boundary component for catching and handling errors.
 
 **Props:**
+
 - `fallback?: React.ComponentType<{ error: Error; resetError: () => void }>` - Custom fallback component
 - `onError?: (error: Error, errorInfo: ErrorInfo) => void` - Error callback
 
 **Usage:**
+
 ```tsx
 <ErrorBoundary fallback={CustomErrorFallback}>
   <YourComponent />
@@ -94,9 +115,11 @@ A React error boundary component for catching and handling errors.
 ```
 
 ### ScreenWrapper
+
 A wrapper component for screens with common functionality.
 
 **Props:**
+
 - `children: React.ReactNode` - Screen content
 - `title?: string` - Screen title
 - `showBackButton?: boolean` - Show back button
@@ -105,6 +128,7 @@ A wrapper component for screens with common functionality.
 - `error?: Error` - Error state
 
 **Usage:**
+
 ```tsx
 <ScreenWrapper title="Profile" showBackButton>
   <ProfileContent />
@@ -112,9 +136,11 @@ A wrapper component for screens with common functionality.
 ```
 
 ### OptimizedImage
+
 A performance-optimized image component with caching and lazy loading.
 
 **Props:**
+
 - `source: ImageSourcePropType` - Image source
 - `style?: StyleProp<ImageStyle>` - Image styles
 - `resizeMode?: ImageResizeMode` - Resize mode
@@ -123,6 +149,7 @@ A performance-optimized image component with caching and lazy loading.
 - `onError?: () => void` - Error callback
 
 **Usage:**
+
 ```tsx
 <OptimizedImage
   source={{ uri: imageUrl }}
@@ -132,15 +159,18 @@ A performance-optimized image component with caching and lazy loading.
 ```
 
 ### Toast
+
 A toast notification component for displaying messages.
 
 **Props:**
+
 - `message: string` - Toast message
 - `type?: 'success' | 'error' | 'warning' | 'info'` - Toast type
 - `duration?: number` - Display duration
 - `onDismiss?: () => void` - Dismiss callback
 
 **Usage:**
+
 ```tsx
 <Toast message="Profile saved successfully!" type="success" />
 ```
@@ -161,4 +191,4 @@ When adding new components to this directory:
 2. Add it to the `index.ts` export
 3. Update this README with component documentation
 4. Add appropriate tests
-5. Follow the established naming conventions 
+5. Follow the established naming conventions
